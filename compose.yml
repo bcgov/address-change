@@ -1,0 +1,31 @@
+# Local development. Add a database service here when persistence is introduced.
+services:
+  api:
+    build: &api-build
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
+    environment:
+      SERVER_PORT: "8080"
+    volumes:
+      - ./api/src:/workspace/api/src:ro
+      - ./api/pom.xml:/workspace/api/pom.xml:ro
+      - maven-cache:/root/.m2
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl --noproxy '*' --fail --silent --max-time 3 http://localhost:8080/actuator/health/readiness | grep -Eq '\"status\"[[:space:]]*:[[:space:]]*\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 120s
+  formatter:
+    profiles: [tools]
+    build: *api-build
+    volumes:
+      - ./api/src:/workspace/api/src:rw
+      - ./api/pom.xml:/workspace/api/pom.xml:ro
+      - maven-cache:/root/.m2
+    command: ["sh", "./mvnw", "--batch-mode", "--no-transfer-progress", "-f", "api/pom.xml", "spotless:apply"]
+volumes:
+  maven-cache:

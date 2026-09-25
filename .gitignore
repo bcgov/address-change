@@ -1,0 +1,23 @@
+**/target/
+.local-tools/
+.run/
+.idea/
+*.iml
+.vscode/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log
+__pycache__/
+*.py[cod]
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# JVM crash reports and heap dumps
+hs_err_pid*
+replay_pid*
+*.hprof
