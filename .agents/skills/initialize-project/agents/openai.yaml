@@ -1,0 +1,4 @@
+interface:
+  display_name: "Initialize Project"
+  short_description: "Set up local configuration after cloning the project"
+  default_prompt: "Use $initialize-project to prepare this checkout and guide me through .env setup."

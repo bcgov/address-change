@@ -1,0 +1,11 @@
+# Local development only. Production packaging is maintained separately.
+FROM maven:3.9.11-eclipse-temurin-17
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+COPY api/pom.xml api/pom.xml
+COPY api/src api/src
+COPY mvnw mvnw
+COPY .mvn .mvn
+EXPOSE 8080
+CMD ["sh", "./mvnw", "--batch-mode", "--no-transfer-progress", "-f", "api/pom.xml", "spring-boot:run"]
