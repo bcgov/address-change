@@ -1,0 +1,64 @@
+# =============================================================================
+# Spectral Ruleset for ols-geocoder
+# =============================================================================
+# Extends the BC Government itk-api-governance strict and SDX rulesets.
+#
+# Guides:
+#   https://developer.gov.bc.ca/docs/default/component/api-style-guides/basic-style-guide/
+#   https://developer.gov.bc.ca/docs/default/component/api-style-guides/sdx-style-guide/
+# Ruleset: https://github.com/bcgov/itk-api-governance/tree/main/dist/spectral
+# =============================================================================
+
+extends:
+  - https://raw.githubusercontent.com/bcgov/itk-api-governance/main/dist/spectral/strict-ruleset.yaml
+  - https://raw.githubusercontent.com/bcgov/itk-api-governance/main/dist/spectral/sdx-ruleset.yaml
+
+rules:
+  # ==========================================================================
+  # SDX API Standard - Project-specific rules
+  # ==========================================================================
+  # These rules are NOT covered by the upstream sdx-ruleset.yaml.
+
+  # SDX: OAD must use OpenAPI 3.x or newer. Swagger 2.0 is not supported.
+  sdx-oas3-required:
+    description: >-
+      SDX requires OpenAPI 3.x or newer. Swagger 2.0 is not supported
+      for SDX provisioning.
+    message: "SDX requires OpenAPI 3.x. Swagger 2.0 is not supported."
+    severity: error
+    given: $
+    then:
+      field: openapi
+      function: pattern
+      functionOptions:
+        match: ^3\.\d+\.\d+$
+
+  # SDX: OAuth2 security scheme required for SDX Gateway authorization.
+  sdx-oauth2-security-scheme:
+    description: >-
+      SDX Gateway authorization must be documented with at least one OAuth2
+      security scheme because the contract must explicitly define the
+      relevant gateway scopes. OpenID Connect schemes should not be the
+      primary scheme for SDX Gateway authorization.
+    message: "No OAuth2 security scheme found; SDX Gateway authorization should be documented with an OAuth2 scheme."
+    severity: warn
+    given: $.components.securitySchemes.*
+    then:
+      field: type
+      function: pattern
+      functionOptions:
+        match: ^oauth2$
+
+  # SDX: Security declarations should reference the security scheme.
+  sdx-security-declaration:
+    description: >-
+      SDX APIs should use security declarations to identify the SDX Gateway
+      OAuth2 scheme and any scopes required to access operations.
+    message: >-
+      Consider adding global or operation-level security declarations
+      for SDX Gateway authorization.
+    severity: warn
+    given: $
+    then:
+      field: security
+      function: truthy

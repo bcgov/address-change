@@ -16,6 +16,7 @@ __pycache__/
 docs/node_modules/
 docs/dist/
 docs/.astro/
+.github/workflows/util/node_modules/
 
 # Operating-system metadata
 .DS_Store
