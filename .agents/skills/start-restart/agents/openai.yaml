@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start/Restart"
+  short_description: "Start or restart and health-check the local API"
+  default_prompt: "Use $start-restart to start or restart the local Address Change API and verify health."

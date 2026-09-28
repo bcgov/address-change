@@ -1,0 +1,8 @@
+*
+!api/
+!api/pom.xml
+!api/src/
+!api/src/**
+!mvnw
+!.mvn/
+!.mvn/**
