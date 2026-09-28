@@ -21,3 +21,4 @@ Desktop.ini
 hs_err_pid*
 replay_pid*
 *.hprof
+**/application-local*.yaml
