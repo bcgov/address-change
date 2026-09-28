@@ -1,3 +1,4 @@
+# Automated tasks that run during a PR
 name: Pull request checks
 on:
   workflow_dispatch:
