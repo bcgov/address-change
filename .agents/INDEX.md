@@ -31,6 +31,12 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `.dockerignore` | Container build context exclusions. |
 | `.gitignore` | Generated output, local tooling, and editor exclusions. |
 | `.gitattributes` | Keeps shell scripts on Linux-compatible LF line endings. |
+| `docs/` | Astro/Starlight docs; Node 22.19+ required. Run npm ci then npm run dev or npm run build here. |
+| `docs/astro.config.mjs` | Navigation, BC government theme, and OpenAPI plugin configuration. |
+| `docs/src/content/docs/index.md` | Basic Address Change documentation landing page. |
+| `docs/src/styles/bc-gov.css` | Geocoder BC government styling; local BC Sans fonts are in docs/public/fonts/. |
+| `docs/public/openapi.json` | Empty OpenAPI specification ready for API contracts. |
+| `docs/package.json` | Documentation scripts and pinned dependencies, locked by package-lock.json. |
 | `LICENSE` | Existing project license. |
 | `.run/` (generated, ignored) | Ignored scratch files and per-command logs under logs/. |
 | `api/target/` (generated, ignored) | Executable JAR and test reports. |

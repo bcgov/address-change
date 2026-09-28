@@ -12,6 +12,11 @@
 __pycache__/
 *.py[cod]
 
+# Documentation build output and dependencies
+docs/node_modules/
+docs/dist/
+docs/.astro/
+
 # Operating-system metadata
 .DS_Store
 Thumbs.db
