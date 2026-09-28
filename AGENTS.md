@@ -15,3 +15,4 @@ When delegating, specify the bounded task, relevant paths, constraints, and expe
 Recommend `gpt-luna-6` sub-agents for bounded tasks that do not need advanced reasoning, such as running the Start/Restart skill, routine checks, and small documentation updates. The currently available model identifier for this recommendation is `gpt-6-luna`; use that identifier when required by the tool. Delegate only when it helps; keep architecture, ambiguous failures, and substantive design decisions with the primary agent. If the recommended model is unavailable, use an available model and state the substitution.
 
 Do NOT update README.md without approval.
+Do NOT read .env files. Only read .env.example and inform the user to update .env when changes are required.

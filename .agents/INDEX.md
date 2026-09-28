@@ -10,7 +10,7 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `.agents/rules/` | One folder per rule, with its Markdown file and optional resources. |
 | `.agents/skills/initialize-project/SKILL.md` | Post-clone .env setup, guided or approved field entry, and startup handoff. |
 | `.agents/skills/start-restart/SKILL.md` | Local Start/Restart workflow. |
-| `api/pom.xml` | Spring Boot 4.1.1, Java 17+, Maven 3.6.3+, dependencies, JAR build, and pinned Java formatting. |
+| `api/pom.xml` | Spring Boot 4.1.1, Java 25+, Maven 3.6.3+, dependencies, JAR build, and pinned Java formatting. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/AddressChangeApiApplication.java` | Spring Boot entry point and component-scan root. |
 | `api/src/main/resources/application.yaml` | Port, application name, health exposure, and probes. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/HealthEndpointTest.java` | HTTP health/probe and endpoint exposure tests. |
