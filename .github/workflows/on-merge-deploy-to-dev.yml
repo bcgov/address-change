@@ -1,0 +1,129 @@
+name: Build & Deploy to DEV
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: address-change-deploy-dev
+  cancel-in-progress: true
+
+env:
+  APP_NAME: "address-change"
+  OPENSHIFT_SERVER: ${{ vars.OPENSHIFT_SERVER }}
+  OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+  OPENSHIFT_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-dev
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_REGISTRY_USER: ${{ github.actor }}
+  IMAGE_REGISTRY_PASSWORD: ${{ github.token }}
+  TAG: "latest"
+  MIN_CPU: "500m"
+  MAX_CPU: "750m"
+  MIN_MEM: "500Mi"
+  MAX_MEM: "2Gi"
+  MIN_REPLICAS: "1"
+  MAX_REPLICAS: "2"
+  CPU_TARGET_PERCENTAGE: "75"
+
+on:
+  # https://docs.github.com/en/actions/reference/events-that-trigger-workflows
+  # Runs on workflow dispatch. Running from another branch manually will use the branch
+  # reference for everything in the script. Update configmaps, etc. all run from that reference branch.
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/**'
+      - 'tools/**'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+
+jobs:
+  build-and-deploy-dev:
+    name: Build and deploy to OpenShift DEV
+    runs-on: ubuntu-24.04
+    environment: dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Login to Artifactory
+        uses: redhat-actions/podman-login@v2
+        with:
+          registry: ${{ vars.DOCKER_ARTIFACTORY_REPO }}
+          username: ${{ secrets.DOCKER_ARTIFACTORY_USERNAME }}
+          password: ${{ secrets.DOCKER_ARTIFACTORY_ACCESS_TOKEN }}
+
+      # https://github.com/redhat-actions/buildah-build#readme
+      - name: Build from Dockerfile
+        id: build-image
+        uses: redhat-actions/buildah-build@v3
+        with:
+          image: ${{ env.APP_NAME }}
+          tags: ${{ env.TAG }}
+          containerfiles: |
+            ./Dockerfile
+
+      # https://github.com/redhat-actions/push-to-registry#readme
+      - name: Push to registry
+        id: push-image
+        uses: redhat-actions/push-to-registry@v3
+        with:
+          image: ${{ steps.build-image.outputs.image }}
+          tags: ${{ steps.build-image.outputs.tags }}
+          registry: ${{ env.IMAGE_REGISTRY }}
+          username: ${{ env.IMAGE_REGISTRY_USER }}
+          password: ${{ env.IMAGE_REGISTRY_PASSWORD }}
+
+      # The pushed image path is available from ${{ steps.push-image.outputs.registry-paths }}
+      - name: Install oc
+        uses: redhat-actions/openshift-tools-installer@v2
+        with:
+          oc: "4"
+
+        # https://github.com/redhat-actions/oc-login#readme
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          # Login to OpenShift and select project
+          oc login --token="${OPENSHIFT_TOKEN}" --server="${OPENSHIFT_SERVER}" \
+            > /dev/null
+          oc project "${OPENSHIFT_NAMESPACE}"
+          # Cancel any rollouts in progress
+          oc rollout cancel "deployment/${APP_NAME}" 2> /dev/null \
+            || echo "No rollout in progress"
+          # tag image stream
+          oc -n "${OPENSHIFT_NAMESPACE}" tag \
+            "${{ steps.push-image.outputs.registry-path }}" \
+            "${APP_NAME}:${TAG}"
+
+          # Process and apply non-sensitive application configuration
+          oc process -f tools/openshift/config-map.yaml \
+            -p APP_NAME="${APP_NAME}" \
+            | oc apply -f -
+
+          # TODO add any secret config here (no sensitive values)
+
+          # Process and apply deployment template
+          oc process -f tools/openshift/api-deployment.yaml \
+            -p NAMESPACE="${OPENSHIFT_NAMESPACE}" \
+            -p APP_NAME="${APP_NAME}" \
+            -p TAG="${TAG}" \
+            -p MIN_REPLICAS="${MIN_REPLICAS}" \
+            -p MAX_REPLICAS="${MAX_REPLICAS}" \
+            -p MIN_CPU="${MIN_CPU}" \
+            -p MAX_CPU="${MAX_CPU}" \
+            -p MIN_MEM="${MIN_MEM}" \
+            -p MAX_MEM="${MAX_MEM}" \
+            -p CPU_TARGET_PERCENTAGE="${CPU_TARGET_PERCENTAGE}" \
+            | oc apply -f -
+
+          # Start rollout (if necessary) and follow it
+          oc rollout restart "deployment/${APP_NAME}"
+
+          # Get status, returns 0 if rollout is successful
+          oc rollout status "deployment/${APP_NAME}" --timeout=5m

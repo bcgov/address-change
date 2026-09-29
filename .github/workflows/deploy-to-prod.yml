@@ -1,0 +1,112 @@
+name: Deploy to PROD
+
+permissions:
+  contents: read
+
+concurrency:
+  group: address-change-deploy-prod
+  cancel-in-progress: true
+
+env:
+  APP_NAME: "address-change"
+  OPENSHIFT_SERVER: ${{ vars.OPENSHIFT_SERVER }}
+  OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+  OPENSHIFT_TEST_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-test
+  OPENSHIFT_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-prod
+  MIN_CPU: "500m"
+  MAX_CPU: "750m"
+  MIN_MEM: "500Mi"
+  MAX_MEM: "2Gi"
+  MIN_REPLICAS: "3"
+  MAX_REPLICAS: "4"
+  PDB_MIN_AVAILABLE: "1"
+  CPU_TARGET_PERCENTAGE: "75"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-to-openshift-prod:
+    name: Deploy to OpenShift PROD
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: prod
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Get latest tag
+        uses: actions-ecosystem/action-get-latest-tag@v1
+        id: get-latest-tag
+
+      - name: Validate latest tag
+        env:
+          LATEST_TAG: ${{ steps.get-latest-tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${LATEST_TAG}" ]]; then
+            echo "No Git tag was found to promote to PROD." >&2
+            exit 1
+          fi
+          echo "RELEASE_TAG=${LATEST_TAG}" >> "${GITHUB_ENV}"
+
+      - name: Install oc
+        uses: redhat-actions/openshift-tools-installer@v2
+        with:
+          oc: "4"
+
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          # Login to OpenShift and select project
+          oc login --token="${OPENSHIFT_TOKEN}" --server="${OPENSHIFT_SERVER}"
+          oc project "${OPENSHIFT_NAMESPACE}"
+
+          # Fail before changing PROD if the matching image was not promoted to TEST
+          oc get imagestreamtag "${APP_NAME}:${RELEASE_TAG}" \
+            --namespace="${OPENSHIFT_TEST_NAMESPACE}"
+
+          # Cancel any rollouts in progress
+          oc rollout cancel "deployment/${APP_NAME}" 2> /dev/null \
+            || echo "No rollout in progress"
+
+          # Tag image stream from TEST
+          oc tag \
+            "${OPENSHIFT_TEST_NAMESPACE}/${APP_NAME}:${RELEASE_TAG}" \
+            "${OPENSHIFT_NAMESPACE}/${APP_NAME}:${RELEASE_TAG}"
+
+          # Process and apply non-sensitive application configuration
+          oc process -f tools/openshift/config-map.yaml \
+            -p APP_NAME="${APP_NAME}" \
+            | oc apply -f -
+
+          # Apply the PROD availability policy
+          oc process -f tools/openshift/pod-disruption-budget.yaml \
+            -p APP_NAME="${APP_NAME}" \
+            -p MIN_AVAILABLE="${PDB_MIN_AVAILABLE}" \
+            | oc apply -f -
+
+           # TODO add any secret config here (no sensitive values)
+
+          # Process and apply deployment template
+          oc process -f tools/openshift/api-deployment.yaml \
+            -p NAMESPACE="${OPENSHIFT_NAMESPACE}" \
+            -p APP_NAME="${APP_NAME}" \
+            -p TAG="${RELEASE_TAG}" \
+            -p MIN_REPLICAS="${MIN_REPLICAS}" \
+            -p MAX_REPLICAS="${MAX_REPLICAS}" \
+            -p MIN_CPU="${MIN_CPU}" \
+            -p MAX_CPU="${MAX_CPU}" \
+            -p MIN_MEM="${MIN_MEM}" \
+            -p MAX_MEM="${MAX_MEM}" \
+            -p CPU_TARGET_PERCENTAGE="${CPU_TARGET_PERCENTAGE}" \
+            | oc apply -f -
+
+          # Start rollout (if necessary) and follow it
+          oc rollout restart "deployment/${APP_NAME}"
+
+          # Get status, returns 0 if rollout is successful
+          oc rollout status "deployment/${APP_NAME}" --timeout=5m

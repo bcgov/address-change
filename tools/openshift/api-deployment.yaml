@@ -1,0 +1,146 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: "${APP_NAME}-template"
+labels:
+  template: "${APP_NAME}-template"
+parameters:
+  - name: NAMESPACE
+    description: Target namespace reference (i.e. 'k8vopl-dev')
+    required: true
+  - name: APP_NAME
+    description: Application name
+    required: true
+  - name: CONTAINER_PORT
+    description: The port on which the application will be accessible
+    value: "8080"
+    required: false
+  - name: TAG
+    description: The identifying tag for this specific deployment
+    required: true
+  - name: MIN_REPLICAS
+    description: The minimum amount of replicas
+    required: true
+  - name: MAX_REPLICAS
+    description: The maximum amount of replicas
+    required: true
+  - name: MIN_CPU
+    description: The minimum amount of cpu
+    required: true
+  - name: MAX_CPU
+    description: The maximum amount of cpu
+    required: true
+  - name: MIN_MEM
+    description: The minimum amount of memory
+    required: true
+  - name: MAX_MEM
+    description: The maximum amount of memory
+    required: true
+  - name: CPU_TARGET_PERCENTAGE
+    description: Target average CPU utilization percentage for horizontal scaling
+    value: "75"
+    required: false
+objects:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      replicas: ${{MIN_REPLICAS}}
+      selector:
+        matchLabels:
+          app: "${APP_NAME}"
+      strategy:
+        type: RollingUpdate
+        rollingUpdate:
+          maxUnavailable: 25%
+          maxSurge: 25%
+      template:
+        metadata:
+          annotations:
+            openshift.io/generated-by: "${APP_NAME}"
+          labels:
+            app: "${APP_NAME}"
+        spec:
+          containers:
+            - name: "${APP_NAME}"
+              image: image-registry.openshift-image-registry.svc:5000/${NAMESPACE}/${APP_NAME}:${TAG}
+              imagePullPolicy: Always
+              ports:
+                - containerPort: ${{CONTAINER_PORT}}
+                  protocol: TCP
+              envFrom:
+                - configMapRef:
+                    name: "${APP_NAME}-config"
+              resources:
+                requests:
+                  cpu: "${MIN_CPU}"
+                  memory: "${MIN_MEM}"
+                limits:
+                  cpu: "${MAX_CPU}"
+                  memory: "${MAX_MEM}"
+              readinessProbe:
+                httpGet:
+                  path: /actuator/health/readiness
+                  port: ${{CONTAINER_PORT}}
+                initialDelaySeconds: 30
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 20
+                successThreshold: 1
+              livenessProbe:
+                httpGet:
+                  path: /actuator/health/liveness
+                  port: ${{CONTAINER_PORT}}
+                periodSeconds: 30
+                timeoutSeconds: 5
+                failureThreshold: 5
+                successThreshold: 1
+              startupProbe:
+                httpGet:
+                  path: /actuator/health/liveness
+                  port: ${{CONTAINER_PORT}}
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 30
+                successThreshold: 1
+              volumeMounts:
+                - name: log-storage
+                  mountPath: /logs
+          volumes:
+            - name: log-storage
+              emptyDir: {}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: "${APP_NAME}"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      selector:
+        app: "${APP_NAME}"
+      ports:
+        - name: ${CONTAINER_PORT}-tcp
+          port: ${{CONTAINER_PORT}}
+          targetPort: ${{CONTAINER_PORT}}
+          protocol: TCP
+  - apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    metadata:
+      name: "${APP_NAME}-cpu-autoscaler"
+    spec:
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: "${APP_NAME}"
+      minReplicas: ${{MIN_REPLICAS}}
+      maxReplicas: ${{MAX_REPLICAS}}
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: ${{CPU_TARGET_PERCENTAGE}}

@@ -19,6 +19,7 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `api/src/main/java/ca/bc/gov/addresschange/api/struct/` | Separate incoming SDG and normalized Address Change contracts. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/SdgWebhookTest.java` | Webhook mapping, acknowledgement, and validation response tests. |
 | `api/src/test/resources/sdg-submission.json` | Synthetic SDG form example used by webhook tests. |
+| `api/src/test/java/ca/bc/gov/addresschange/api/OpenApiSpecTest.java` | Exports the running app contract to api/target/openapi.json with -Popenapi-spec; Springdoc is test-only. |
 | `tools/check_index.py` | Validates indexed paths, duplicates, and repository boundaries; skips generated output. |
 | `tools/test_check_index.py` | Regression checks for index validation. |
 | `.editorconfig` | Shared encoding, line endings, indentation, and whitespace settings. |
@@ -30,12 +31,27 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `.mvn/wrapper/maven-wrapper.properties` | Maven version, distribution URL, and checksum pin. |
 | `tools/app.sh` | Bash convenience entry point forwarding to the portable Python helper. |
 | `.github/workflows/check-agents-index.yml` | Checks index paths and checker tests on pushes and pull requests. |
+| `.github/workflows/on-merge-deploy-to-dev.yml` | Builds the production image and deploys the latest revision to OpenShift DEV. |
+| `.github/workflows/deploy-to-test.yml` | Promotes the latest tagged DEV image and matching main-branch manifests to OpenShift TEST. |
+| `.github/workflows/deploy-to-prod.yml` | Promotes the latest tagged TEST image and matching main-branch manifests to OpenShift PROD. |
+| `Dockerfile` | Multi-stage Java 25 production image using a non-root Alpine runtime. |
+| `.github/workflows/docs.yml` | Validate and build docs on PRs; publish main to GitHub Pages. |
+| `.github/workflows/openapi-spec.yml` | Generate from Java with the openapi-spec Maven profile, enrich metadata, lint, and upload for docs. |
+| `.github/workflows/util/` | Pinned Spectral validator and rules; run npm ci then npm run lint:openapi here. |
 | `Dockerfile.dev` | Local Maven development image; production packaging is separate. |
 | `compose.yml` | Local API, optional formatter service, health check, source mounts, and Maven cache. |
+| `tools/openshift/api-deployment.yaml` | Parameterized OpenShift Deployment, Service, health probes, and horizontal autoscaler. |
+| `tools/openshift/config-map.yaml` | Empty parameterized application ConfigMap populated with non-sensitive settings as needed. |
+| `tools/openshift/pod-disruption-budget.yaml` | Optional parameterized availability policy for TEST and PROD deployments with multiple replicas. |
 | `.env.example` | Shared template for the local port; copy to ignored `.env`. |
 | `.dockerignore` | Container build context exclusions. |
 | `.gitignore` | Generated output, local tooling, and editor exclusions. |
 | `.gitattributes` | Keeps shell scripts on Linux-compatible LF line endings. |
+| `docs/` | Astro/Starlight docs; Node 22.19+ required. Run npm ci then npm run dev or npm run build here. |
+| `docs/astro.config.mjs` | Navigation, BC government theme, and OpenAPI plugin configuration. |
+| `docs/src/content/docs/index.md` | Basic Address Change documentation landing page. |
+| `docs/src/styles/bc-gov.css` | Geocoder BC government styling; local BC Sans fonts are in docs/public/fonts/. |
+| `docs/package.json` | Documentation scripts and pinned dependencies, locked by package-lock.json. |
 | `LICENSE` | Existing project license. |
 | `.run/` (generated, ignored) | Ignored scratch files and per-command logs under logs/. |
 | `api/target/` (generated, ignored) | Executable JAR and test reports. |
