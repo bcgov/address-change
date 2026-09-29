@@ -14,6 +14,11 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `api/src/main/java/ca/bc/gov/addresschange/api/AddressChangeApiApplication.java` | Spring Boot entry point and component-scan root. |
 | `api/src/main/resources/application.yaml` | Port, application name, health exposure, and probes. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/HealthEndpointTest.java` | HTTP health/probe and endpoint exposure tests. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/controller/` | SDG webhook HTTP endpoint and safe validation error responses. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/service/` | SDG payload normalization into the Address Change contract. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/struct/` | Separate incoming SDG and normalized Address Change contracts. |
+| `api/src/test/java/ca/bc/gov/addresschange/api/SdgWebhookTest.java` | Webhook mapping, acknowledgement, and validation response tests. |
+| `api/src/test/resources/sdg-submission.json` | Synthetic SDG form example used by webhook tests. |
 | `tools/check_index.py` | Validates indexed paths, duplicates, and repository boundaries; skips generated output. |
 | `tools/test_check_index.py` | Regression checks for index validation. |
 | `.editorconfig` | Shared encoding, line endings, indentation, and whitespace settings. |
