@@ -36,6 +36,10 @@ parameters:
   - name: MAX_MEM
     description: The maximum amount of memory
     required: true
+  - name: CPU_TARGET_PERCENTAGE
+    description: Target average CPU utilization percentage for horizontal scaling
+    value: "75"
+    required: false
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -57,9 +61,6 @@ objects:
         metadata:
           annotations:
             openshift.io/generated-by: "${APP_NAME}"
-            prometheus.io/path: /actuator/prometheus
-            prometheus.io/port: '8080'
-            prometheus.io/scrape: 'true'
           labels:
             app: "${APP_NAME}"
         spec:
@@ -70,9 +71,9 @@ objects:
               ports:
                 - containerPort: ${{CONTAINER_PORT}}
                   protocol: TCP
-              #envFrom:
-               # - configMapRef:
-                #    name: "${APP_NAME}-config-map"
+              envFrom:
+                - configMapRef:
+                    name: "${APP_NAME}-config"
               resources:
                 requests:
                   cpu: "${MIN_CPU}"
@@ -81,8 +82,9 @@ objects:
                   cpu: "${MAX_CPU}"
                   memory: "${MAX_MEM}"
               readinessProbe:
-                tcpSocket:
-                  port: 8080
+                httpGet:
+                  path: /actuator/health/readiness
+                  port: ${{CONTAINER_PORT}}
                 initialDelaySeconds: 30
                 periodSeconds: 10
                 timeoutSeconds: 5
@@ -90,12 +92,19 @@ objects:
                 successThreshold: 1
               livenessProbe:
                 httpGet:
-                  path: /actuator/health
-                  port: 8080
-                initialDelaySeconds: 180
+                  path: /actuator/health/liveness
+                  port: ${{CONTAINER_PORT}}
                 periodSeconds: 30
                 timeoutSeconds: 5
                 failureThreshold: 5
+                successThreshold: 1
+              startupProbe:
+                httpGet:
+                  path: /actuator/health/liveness
+                  port: ${{CONTAINER_PORT}}
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 30
                 successThreshold: 1
               volumeMounts:
                 - name: log-storage
@@ -115,6 +124,7 @@ objects:
       ports:
         - name: ${CONTAINER_PORT}-tcp
           port: ${{CONTAINER_PORT}}
+          targetPort: ${{CONTAINER_PORT}}
           protocol: TCP
   - apiVersion: autoscaling/v2
     kind: HorizontalPodAutoscaler
@@ -133,4 +143,4 @@ objects:
             name: cpu
             target:
               type: Utilization
-              averageUtilization: 200
+              averageUtilization: ${{CPU_TARGET_PERCENTAGE}}
