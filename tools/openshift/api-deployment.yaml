@@ -55,8 +55,9 @@ objects:
       strategy:
         type: RollingUpdate
         rollingUpdate:
-          maxUnavailable: 25%
-          maxSurge: 25%
+          # Namespace CPU quota cannot accommodate an additional surge pod.
+          maxUnavailable: 1
+          maxSurge: 0
       template:
         metadata:
           annotations:
