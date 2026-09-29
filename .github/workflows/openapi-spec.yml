@@ -41,6 +41,8 @@ jobs:
     name: Generate, Enrich & Lint OpenAPI Spec
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
