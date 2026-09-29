@@ -1,0 +1,154 @@
+# Generate, enrich, and lint the Address Change contract for documentation.
+name: OpenAPI Spec
+
+on:
+  workflow_dispatch:
+    inputs:
+      bypass_lint:
+        description: "Bypass SDX lint failures (enriched spec is still uploaded)"
+        required: false
+        default: false
+        type: boolean
+
+env:
+  JAVA_VERSION: "25"
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+  # ── API Metadata ──────────────────────────────────────────────────────────
+  API_TITLE: "Address Change API"
+  API_DESCRIPTION: >-
+    TBD
+
+  # ── Servers ───────────────────────────────────────────────────────────────
+  SERVER_PROD_URL: ""
+  SERVER_PROD_DESC: "Production environment"
+  SERVER_TEST_URL: ""
+  SERVER_TEST_DESC: "Test environment"
+  SERVER_DLV_URL: ""
+  SERVER_DLV_DESC: "Development environment"
+
+  # ── Contact / License / Docs ──────────────────────────────────────────────
+  CONTACT_NAME: "Contact the Location Services team"
+  CONTACT_URL: "https://dpdd.atlassian.net/servicedesk/customer/portal/1/group/7/"
+  LICENSE_NAME: "Open Government License - British Columbia"
+  LICENSE_URL: "https://www2.gov.bc.ca/gov/content?id=A519A56BC2BF44E4A008B33FCF527F61"
+  TOS_URL: "https://www2.gov.bc.ca/gov/content?id=D1EE0A405E584363B205CD4353E02C88"
+  EXTERNAL_DOCS_DESC: "BC Address Change"
+  EXTERNAL_DOCS_URL: ""
+
+jobs:
+  enrich-and-lint:
+    name: Generate, Enrich & Lint OpenAPI Spec
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@v6
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Generate OpenAPI spec from the application
+        run: sh ./mvnw --batch-mode --no-transfer-progress -f api/pom.xml -Popenapi-spec clean verify
+
+      - name: Verify generated spec exists
+        run: |
+          if [ ! -s api/target/openapi.json ]; then
+            echo "::error::OpenAPI spec was not generated at api/target/openapi.json"
+            exit 1
+          fi
+
+      - name: Enrich OpenAPI spec with metadata
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          path = Path('api/target/openapi.json')
+          spec = json.loads(path.read_text(encoding='utf-8'))
+          version = ET.parse('api/pom.xml').getroot().findtext(
+              '{http://maven.apache.org/POM/4.0.0}version'
+          )
+          if not version or not version.strip():
+              raise ValueError('api/pom.xml must declare the application version')
+
+          info = spec.setdefault('info', {})
+          info['version'] = version.strip()
+          for field, variable in (
+              ('title', 'API_TITLE'), ('description', 'API_DESCRIPTION'),
+              ('termsOfService', 'TOS_URL'),
+          ):
+              value = os.environ.get(variable)
+              if value:
+                  info[field] = value.replace('\\n', '\n') if field == 'description' else value
+
+          for field, variables in (
+              ('contact', {'name': 'CONTACT_NAME', 'url': 'CONTACT_URL'}),
+              ('license', {'name': 'LICENSE_NAME', 'url': 'LICENSE_URL'}),
+          ):
+              values = {key: os.environ[var] for key, var in variables.items() if os.environ.get(var)}
+              if values:
+                  info.setdefault(field, {}).update(values)
+
+          servers = []
+          for environment in ('PROD', 'TEST', 'DLV'):
+              url = os.environ.get(f'SERVER_{environment}_URL')
+              if url:
+                  server = {'url': url}
+                  description = os.environ.get(f'SERVER_{environment}_DESC')
+                  if description:
+                      server['description'] = description
+                  servers.append(server)
+          if servers:
+              spec['servers'] = servers
+          else:
+              # Do not publish the random-port test server from generation.
+              spec.pop('servers', None)
+
+          if os.environ.get('EXTERNAL_DOCS_URL'):
+              external = spec.setdefault('externalDocs', {})
+              external['url'] = os.environ['EXTERNAL_DOCS_URL']
+              if os.environ.get('EXTERNAL_DOCS_DESC'):
+                  external['description'] = os.environ['EXTERNAL_DOCS_DESC']
+
+          # Preserve all API paths, tags, components, and security declarations.
+          path.write_text(json.dumps(spec, indent=2) + '\n', encoding='utf-8')
+          PY
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: .github/workflows/util/package-lock.json
+
+      - name: Install npm dependencies
+        run: npm ci --ignore-scripts
+        working-directory: .github/workflows/util
+
+      - name: Validate OpenAPI structure and SDX rules
+        continue-on-error: ${{ inputs.bypass_lint }}
+        run: npm run lint:openapi:generated
+        working-directory: .github/workflows/util
+
+      - name: Upload OpenAPI spec
+        uses: actions/upload-artifact@v7
+        with:
+          name: openapi-spec
+          path: api/target/openapi.json
+          if-no-files-found: error
+          retention-days: 30
