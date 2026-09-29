@@ -31,6 +31,7 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `compose.yml` | Local API, optional formatter service, health check, source mounts, and Maven cache. |
 | `tools/openshift/api-deployment.yaml` | Parameterized OpenShift Deployment, Service, health probes, and horizontal autoscaler. |
 | `tools/openshift/config-map.yaml` | Empty parameterized application ConfigMap populated with non-sensitive settings as needed. |
+| `tools/openshift/pod-disruption-budget.yaml` | Optional parameterized availability policy for TEST and PROD deployments with multiple replicas. |
 | `.env.example` | Shared template for the local port; copy to ignored `.env`. |
 | `.dockerignore` | Container build context exclusions. |
 | `.gitignore` | Generated output, local tooling, and editor exclusions. |
