@@ -105,6 +105,8 @@ jobs:
             -p APP_NAME="${APP_NAME}" \
             | oc apply -f -
 
+          # TODO add any secret config here (no sensitive values)
+
           # Process and apply deployment template
           oc process -f tools/openshift/api-deployment.yaml \
             -p NAMESPACE="${OPENSHIFT_NAMESPACE}" \
@@ -119,10 +121,8 @@ jobs:
             -p CPU_TARGET_PERCENTAGE="${CPU_TARGET_PERCENTAGE}" \
             | oc apply -f -
 
-          # TODO: Add secret provisioning here without committing secret values
-
           # Start rollout (if necessary) and follow it
           oc rollout restart "deployment/${APP_NAME}"
 
           # Get status, returns 0 if rollout is successful
-          oc rollout status "deployment/${APP_NAME}"
+          oc rollout status "deployment/${APP_NAME}" --timeout=5m

@@ -27,6 +27,7 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `.github/workflows/check-agents-index.yml` | Checks index paths and checker tests on pushes and pull requests. |
 | `.github/workflows/on-merge-deploy-to-dev.yml` | Builds the production image and deploys the latest revision to OpenShift DEV. |
 | `.github/workflows/deploy-to-test.yml` | Promotes the latest tagged DEV image and matching main-branch manifests to OpenShift TEST. |
+| `.github/workflows/deploy-to-prod.yml` | Promotes the latest tagged TEST image and matching main-branch manifests to OpenShift PROD. |
 | `Dockerfile` | Multi-stage Java 25 production image using a non-root Alpine runtime. |
 | `Dockerfile.dev` | Local Maven development image; production packaging is separate. |
 | `compose.yml` | Local API, optional formatter service, health check, source mounts, and Maven cache. |

@@ -1,18 +1,18 @@
-name: Deploy to TEST
+name: Deploy to PROD
 
 permissions:
   contents: read
 
 concurrency:
-  group: address-change-deploy-test
+  group: address-change-deploy-prod
   cancel-in-progress: true
 
 env:
   APP_NAME: "address-change"
   OPENSHIFT_SERVER: ${{ vars.OPENSHIFT_SERVER }}
   OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
-  OPENSHIFT_DEV_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-dev
-  OPENSHIFT_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-test
+  OPENSHIFT_TEST_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-test
+  OPENSHIFT_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-prod
   MIN_CPU: "500m"
   MAX_CPU: "750m"
   MIN_MEM: "500Mi"
@@ -26,11 +26,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy-to-openshift-test:
-    name: Deploy to OpenShift TEST
+  deploy-to-openshift-prod:
+    name: Deploy to OpenShift PROD
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    environment: test
+    environment: prod
 
     steps:
       - name: Check out repository
@@ -48,7 +48,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${LATEST_TAG}" ]]; then
-            echo "No Git tag was found to promote to TEST." >&2
+            echo "No Git tag was found to promote to PROD." >&2
             exit 1
           fi
           echo "RELEASE_TAG=${LATEST_TAG}" >> "${GITHUB_ENV}"
@@ -65,17 +65,17 @@ jobs:
           oc login --token="${OPENSHIFT_TOKEN}" --server="${OPENSHIFT_SERVER}"
           oc project "${OPENSHIFT_NAMESPACE}"
 
-          # Fail before changing TEST if the matching image was not tagged in DEV
+          # Fail before changing PROD if the matching image was not promoted to TEST
           oc get imagestreamtag "${APP_NAME}:${RELEASE_TAG}" \
-            --namespace="${OPENSHIFT_DEV_NAMESPACE}"
+            --namespace="${OPENSHIFT_TEST_NAMESPACE}"
 
           # Cancel any rollouts in progress
           oc rollout cancel "deployment/${APP_NAME}" 2> /dev/null \
             || echo "No rollout in progress"
 
-          # tag image stream from dev
+          # Tag image stream from TEST
           oc tag \
-            "${OPENSHIFT_DEV_NAMESPACE}/${APP_NAME}:${RELEASE_TAG}" \
+            "${OPENSHIFT_TEST_NAMESPACE}/${APP_NAME}:${RELEASE_TAG}" \
             "${OPENSHIFT_NAMESPACE}/${APP_NAME}:${RELEASE_TAG}"
 
           # Process and apply non-sensitive application configuration
@@ -83,7 +83,7 @@ jobs:
             -p APP_NAME="${APP_NAME}" \
             | oc apply -f -
 
-          # Apply the TEST availability policy
+          # Apply the PROD availability policy
           oc process -f tools/openshift/pod-disruption-budget.yaml \
             -p APP_NAME="${APP_NAME}" \
             -p MIN_AVAILABLE="${PDB_MIN_AVAILABLE}" \
