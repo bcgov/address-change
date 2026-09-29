@@ -4,6 +4,10 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: address-change-deploy-dev
+  cancel-in-progress: true
+
 env:
   APP_NAME: "address-change"
   OPENSHIFT_SERVER: ${{ vars.OPENSHIFT_SERVER }}
@@ -33,22 +37,22 @@ on:
       - 'api/**'
       - 'tools/**'
       - 'Dockerfile'
-      - '.github/workflows/on-merge-deploy-to-dev.yml'
+      - '.github/workflows/**'
 
 jobs:
   build-and-deploy-dev:
     name: Build and deploy to OpenShift DEV
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: dev
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
       - name: Login to Artifactory
-        uses: docker/login-action@v3
+        uses: redhat-actions/podman-login@v2
         with:
           registry: ${{ vars.DOCKER_ARTIFACTORY_REPO }}
           username: ${{ secrets.DOCKER_ARTIFACTORY_USERNAME }}
@@ -57,17 +61,17 @@ jobs:
       # https://github.com/redhat-actions/buildah-build#readme
       - name: Build from Dockerfile
         id: build-image
-        uses: redhat-actions/buildah-build@v2
+        uses: redhat-actions/buildah-build@v3
         with:
           image: ${{ env.APP_NAME }}
           tags: ${{ env.TAG }}
-          dockerfiles: |
+          containerfiles: |
             ./Dockerfile
 
       # https://github.com/redhat-actions/push-to-registry#readme
       - name: Push to registry
         id: push-image
-        uses: redhat-actions/push-to-registry@v2
+        uses: redhat-actions/push-to-registry@v3
         with:
           image: ${{ steps.build-image.outputs.image }}
           tags: ${{ steps.build-image.outputs.tags }}
@@ -75,11 +79,11 @@ jobs:
           username: ${{ env.IMAGE_REGISTRY_USER }}
           password: ${{ env.IMAGE_REGISTRY_PASSWORD }}
 
-      # The path the image was pushed to is now stored in ${{ steps.push-image.outputs.registry-path }}
+      # The pushed image path is available from ${{ steps.push-image.outputs.registry-paths }}
       - name: Install oc
-        uses: redhat-actions/openshift-tools-installer@v1
+        uses: redhat-actions/openshift-tools-installer@v2
         with:
-          oc: 4
+          oc: "4"
 
         # https://github.com/redhat-actions/oc-login#readme
       - name: Deploy
@@ -93,7 +97,7 @@ jobs:
             || echo "No rollout in progress"
           # tag image stream
           oc -n "${OPENSHIFT_NAMESPACE}" tag \
-            "${{ steps.push-image.outputs.registry-path }}" \
+            "${{ steps.push-image.outputs.registry-paths }}" \
             "${APP_NAME}:${TAG}"
 
           # Process and apply non-sensitive application configuration
