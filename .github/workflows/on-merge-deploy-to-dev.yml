@@ -90,14 +90,15 @@ jobs:
         run: |
           set -euo pipefail
           # Login to OpenShift and select project
-          oc login --token="${OPENSHIFT_TOKEN}" --server="${OPENSHIFT_SERVER}"
+          oc login --token="${OPENSHIFT_TOKEN}" --server="${OPENSHIFT_SERVER}" \
+            > /dev/null
           oc project "${OPENSHIFT_NAMESPACE}"
           # Cancel any rollouts in progress
           oc rollout cancel "deployment/${APP_NAME}" 2> /dev/null \
             || echo "No rollout in progress"
           # tag image stream
           oc -n "${OPENSHIFT_NAMESPACE}" tag \
-            "${{ steps.push-image.outputs.registry-paths }}" \
+            "${{ steps.push-image.outputs.registry-path }}" \
             "${APP_NAME}:${TAG}"
 
           # Process and apply non-sensitive application configuration
