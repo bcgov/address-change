@@ -17,23 +17,24 @@ env:
 jobs:
   quality_profile:
     name: Compile, test, and analyze
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v6
         with:
-          distribution: corretto
+          distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
+          cache-dependency-path: api/pom.xml
 
       - name: Compile and run unit tests
-        run: mvn --batch-mode --update-snapshots clean install
+        run: bash ./mvnw --batch-mode -f api/pom.xml clean verify
 
       - name: Cache Sonar packages
         uses: actions/cache@v6
@@ -45,7 +46,7 @@ jobs:
 
       - name: Run Sonar analysis
         run: >
-          mvn --batch-mode
+          bash ./mvnw --batch-mode -f api/pom.xml
           org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar
           -Dsonar.host.url="${{ vars.SONAR_HOST_URL }}"
           -Dsonar.organization="${{ vars.SONAR_ORG }}"
