@@ -39,16 +39,14 @@ public class SdgWebhookController {
             responses = {
                 @ApiResponse(
                         responseCode = "202",
-                        description =
-                                "Submission normalized and acknowledged with a request ID.",
+                        description = "Submission normalized and acknowledged with a request ID.",
                         content =
                                 @Content(
                                         mediaType = MediaType.APPLICATION_JSON_VALUE,
                                         schema = @Schema(implementation = Acknowledgement.class))),
                 @ApiResponse(
                         responseCode = "400",
-                        description =
-                                "The JSON submission is malformed or fails field validation.",
+                        description = "The JSON submission is malformed or fails field validation.",
                         content =
                                 @Content(
                                         mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
