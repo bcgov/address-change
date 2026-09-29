@@ -26,11 +26,18 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `.mvn/wrapper/maven-wrapper.properties` | Maven version, distribution URL, and checksum pin. |
 | `tools/app.sh` | Bash convenience entry point forwarding to the portable Python helper. |
 | `.github/workflows/check-agents-index.yml` | Checks index paths and checker tests on pushes and pull requests. |
+| `.github/workflows/on-merge-deploy-to-dev.yml` | Builds the production image and deploys the latest revision to OpenShift DEV. |
+| `.github/workflows/deploy-to-test.yml` | Promotes the latest tagged DEV image and matching main-branch manifests to OpenShift TEST. |
+| `.github/workflows/deploy-to-prod.yml` | Promotes the latest tagged TEST image and matching main-branch manifests to OpenShift PROD. |
+| `Dockerfile` | Multi-stage Java 25 production image using a non-root Alpine runtime. |
 | `.github/workflows/docs.yml` | Validate and build docs on PRs; publish main to GitHub Pages. |
 | `.github/workflows/openapi-spec.yml` | Generate from Java with the openapi-spec Maven profile, enrich metadata, lint, and upload for docs. |
 | `.github/workflows/util/` | Pinned Spectral validator and rules; run npm ci then npm run lint:openapi here. |
 | `Dockerfile.dev` | Local Maven development image; production packaging is separate. |
 | `compose.yml` | Local API, optional formatter service, health check, source mounts, and Maven cache. |
+| `tools/openshift/api-deployment.yaml` | Parameterized OpenShift Deployment, Service, health probes, and horizontal autoscaler. |
+| `tools/openshift/config-map.yaml` | Empty parameterized application ConfigMap populated with non-sensitive settings as needed. |
+| `tools/openshift/pod-disruption-budget.yaml` | Optional parameterized availability policy for TEST and PROD deployments with multiple replicas. |
 | `.env.example` | Shared template for the local port; copy to ignored `.env`. |
 | `.dockerignore` | Container build context exclusions. |
 | `.gitignore` | Generated output, local tooling, and editor exclusions. |

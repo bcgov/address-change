@@ -1,0 +1,82 @@
+# Cuts a version tag and promotes an image for deployment
+name: Create Tag
+
+permissions:
+  contents: write
+
+concurrency:
+  group: address-change-deploy-dev
+  cancel-in-progress: false
+
+env:
+  OPENSHIFT_SERVER: ${{ vars.OPENSHIFT_SERVER }}
+  OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+  OPENSHIFT_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-dev
+  APP_NAME: "address-change"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (for example, 1.2.3 or v1.2.3)'
+        required: true
+        type: string
+
+jobs:
+  tag_image:
+    name: Tag Image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Validate version
+        env:
+          RELEASE_VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${RELEASE_VERSION_INPUT}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must resemble 1.2.3 or v1.2.3, with an optional prerelease suffix." >&2
+            exit 1
+          fi
+
+          git check-ref-format "refs/tags/${RELEASE_VERSION_INPUT}"
+          echo "RELEASE_VERSION=${RELEASE_VERSION_INPUT}" >> "${GITHUB_ENV}"
+
+      - name: Install oc
+        uses: redhat-actions/openshift-tools-installer@v2
+        with:
+          oc: "4"
+
+      - name: Validate source image
+        run: |
+          set -euo pipefail
+
+          oc login --token="${OPENSHIFT_TOKEN}" --server="${OPENSHIFT_SERVER}"
+          oc get imagestreamtag "${APP_NAME}:latest" \
+            --namespace="${OPENSHIFT_NAMESPACE}"
+
+      - name: Create tag
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${process.env.RELEASE_VERSION}`,
+              sha: context.sha
+            })
+
+      - name: Tag in OpenShift
+        run: |
+          set -euo pipefail
+
+          oc tag \
+            "${OPENSHIFT_NAMESPACE}/${APP_NAME}:latest" \
+            "${OPENSHIFT_NAMESPACE}/${APP_NAME}:${RELEASE_VERSION}"

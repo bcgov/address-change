@@ -1,0 +1,26 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: "${APP_NAME}-pdb-template"
+labels:
+  template: "${APP_NAME}-pdb-template"
+parameters:
+  - name: APP_NAME
+    description: Application name used to identify the PodDisruptionBudget
+    required: true
+  - name: MIN_AVAILABLE
+    description: Minimum number of pods that must remain available during voluntary disruptions
+    value: "1"
+    required: false
+objects:
+  - apiVersion: policy/v1
+    kind: PodDisruptionBudget
+    metadata:
+      name: "${APP_NAME}-pdb"
+      labels:
+        app: "${APP_NAME}"
+    spec:
+      minAvailable: ${{MIN_AVAILABLE}}
+      selector:
+        matchLabels:
+          app: "${APP_NAME}"
