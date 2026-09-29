@@ -17,12 +17,13 @@ env:
   IMAGE_REGISTRY_USER: ${{ github.actor }}
   IMAGE_REGISTRY_PASSWORD: ${{ github.token }}
   TAG: "latest"
-  MIN_CPU: "500m"
-  MAX_CPU: "750m"
-  MIN_MEM: "500Mi"
-  MAX_MEM: "2Gi"
-  MIN_REPLICAS: "1"
-  MAX_REPLICAS: "2"
+  # Three replicas fit within 500m requested CPU and 2Gi requested memory.
+  MIN_CPU: "150m"
+  MAX_CPU: "500m"
+  MIN_MEM: "400Mi"
+  MAX_MEM: "512Mi"
+  MIN_REPLICAS: "2"
+  MAX_REPLICAS: "3"
   CPU_TARGET_PERCENTAGE: "75"
 
 on:
