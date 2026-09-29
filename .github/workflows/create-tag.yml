@@ -5,7 +5,7 @@ env:
   OPENSHIFT_SERVER: ${{ vars.OPENSHIFT_SERVER }}
   OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
   OPENSHIFT_NAMESPACE: ${{ vars.OPENSHIFT_NAMESPACE }}-dev
-  IMAGE_NAME: "address-change"
+  APP_NAME: "address-change"
   TAG: "latest"
 
 on:
@@ -47,4 +47,4 @@ jobs:
           oc login --token=${{ env.OPENSHIFT_TOKEN }} --server=${{ env.OPENSHIFT_SERVER }}
           oc project ${{ env.OPENSHIFT_NAMESPACE }}
 
-          oc tag ${{ env.OPENSHIFT_NAMESPACE }}/${{ env.IMAGE_NAME }}:latest ${{ env.OPENSHIFT_NAMESPACE }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.version }}
+          oc tag ${{ env.OPENSHIFT_NAMESPACE }}/${{ env.APP_NAME }}:latest ${{ env.OPENSHIFT_NAMESPACE }}/${{ env.APP_NAME }}:${{ github.event.inputs.version }}
