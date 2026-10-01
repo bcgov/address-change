@@ -65,6 +65,14 @@ class RestExceptionHandlerTest {
         assertProblem(send("/test/failure", "GET", "application/json", ""), 500);
     }
 
+    @Test
+    void preservesOtherClientErrorStatusesWithoutExposingExceptionDetails() throws Exception {
+        var response = send("/test/conflict", "GET", "application/json", "");
+        assertProblem(response, 409);
+        assertThat(mapper.readTree(response.body()).get("detail").asString())
+                .isEqualTo("The request could not be processed.");
+    }
+
     @RestController
     static class OtherController {
         @PostMapping("/test/other")
@@ -75,6 +83,11 @@ class RestExceptionHandlerTest {
         @GetMapping("/test/missing")
         public void missing() {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PRIVATE missing record");
+        }
+
+        @GetMapping("/test/conflict")
+        public void conflict() {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "PRIVATE conflict details");
         }
 
         @GetMapping("/test/failure")
