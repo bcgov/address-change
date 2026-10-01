@@ -2,8 +2,8 @@ package ca.bc.gov.addresschange.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import ca.bc.gov.addresschange.api.service.SdgNormalizationService;
-import ca.bc.gov.addresschange.api.struct.SdgSubmission;
+import ca.bc.gov.addresschange.api.service.v1.SdgNormalizationService;
+import ca.bc.gov.addresschange.api.struct.v1.SdgSubmission;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -31,7 +31,8 @@ class SdgWebhookTest {
 
     private HttpResponse<String> post(String body) throws Exception {
         var request =
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/sdg/webhook"))
+                HttpRequest.newBuilder(
+                                URI.create("http://localhost:" + port + "/api/v1/address/sdg"))
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();
@@ -43,7 +44,7 @@ class SdgWebhookTest {
         var requestId = UUID.randomUUID();
         var submission = mapper.readValue(example(), SdgSubmission.class);
         var normalized = normalizer.normalize(requestId, submission);
-        assertThat(normalized.requestId()).isEqualTo(requestId);
+        assertThat(normalized.getRequestId()).isEqualTo(requestId);
         assertThat(normalizer.normalize(requestId, submission)).isEqualTo(normalized);
         var actual = (ObjectNode) mapper.valueToTree(normalized);
         actual.remove("requestId");
@@ -92,14 +93,14 @@ class SdgWebhookTest {
         var normalized =
                 normalizer.normalize(
                         UUID.randomUUID(), mapper.treeToValue(payload, SdgSubmission.class));
-        assertThat(normalized.person().middleNameInitials()).isEmpty();
-        assertThat(normalized.notificationIntent().notifyIcbc()).isFalse();
-        assertThat(normalized.notificationIntent().notifyMsp()).isFalse();
-        assertThat(normalized.legacyIdentifiers().icbc().driversLicenceNumber())
+        assertThat(normalized.getPerson().getMiddleNameInitials()).isEmpty();
+        assertThat(normalized.getNotificationIntent().isNotifyIcbc()).isFalse();
+        assertThat(normalized.getNotificationIntent().isNotifyMsp()).isFalse();
+        assertThat(normalized.getLegacyIdentifiers().getIcbc().getDriversLicenceNumber())
                 .isEqualTo("00123456");
-        assertThat(normalized.legacyIdentifiers().msp().phn()).isEqualTo("0012345678");
-        assertThat(normalized.legacyIdentifiers().icbc().heightCm()).isNull();
-        assertThat(normalized.legacyIdentifiers().icbc().weightKg()).isNull();
+        assertThat(normalized.getLegacyIdentifiers().getMsp().getPhn()).isEqualTo("0012345678");
+        assertThat(normalized.getLegacyIdentifiers().getIcbc().getHeightCm()).isNull();
+        assertThat(normalized.getLegacyIdentifiers().getIcbc().getWeightKg()).isNull();
         assertThat(post(payload.toString()).statusCode()).isEqualTo(202);
     }
 

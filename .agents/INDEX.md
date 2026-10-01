@@ -14,10 +14,14 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `api/src/main/java/ca/bc/gov/addresschange/api/AddressChangeApiApplication.java` | Spring Boot entry point and component-scan root. |
 | `api/src/main/resources/application.yaml` | Port, application name, health exposure, and probes. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/HealthEndpointTest.java` | HTTP health/probe and endpoint exposure tests. |
-| `api/src/main/java/ca/bc/gov/addresschange/api/controller/` | SDG webhook HTTP endpoint and safe validation error responses. |
-| `api/src/main/java/ca/bc/gov/addresschange/api/service/` | SDG payload normalization into the Address Change contract. |
-| `api/src/main/java/ca/bc/gov/addresschange/api/struct/` | Separate incoming SDG and normalized Address Change contracts. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/constants/v1/URL.java` | Shared v1 base path and SDG route suffix. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/endpoint/v1/` | Versioned HTTP mappings and OpenAPI contracts; SDG uses POST /api/v1/address/sdg. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/controller/v1/` | Implementations of the v1 endpoint contracts. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/exception/` | API-wide safe ProblemDetail responses for validation, HTTP errors, and unexpected failures. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/service/v1/` | SDG payload normalization into the Address Change contract. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/struct/v1/` | Separate Lombok DTO classes for incoming SDG, normalized Address Change, and acknowledgement contracts. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/SdgWebhookTest.java` | Webhook mapping, acknowledgement, and validation response tests. |
+| `api/src/test/java/ca/bc/gov/addresschange/api/RestExceptionHandlerTest.java` | API-wide validation, safe errors, HTTP status, and method-header regression tests. |
 | `api/src/test/resources/sdg-submission.json` | Synthetic SDG form example used by webhook tests. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/OpenApiSpecTest.java` | Exports the running app contract to api/target/openapi.json with -Popenapi-spec; Springdoc is test-only. |
 | `tools/check_index.py` | Validates indexed paths, duplicates, and repository boundaries; skips generated output. |

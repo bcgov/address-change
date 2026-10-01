@@ -1,33 +1,27 @@
-package ca.bc.gov.addresschange.api.controller;
+package ca.bc.gov.addresschange.api.endpoint.v1;
 
-import ca.bc.gov.addresschange.api.service.SdgNormalizationService;
-import ca.bc.gov.addresschange.api.struct.SdgSubmission;
+import ca.bc.gov.addresschange.api.constants.v1.URL;
+import ca.bc.gov.addresschange.api.struct.v1.AddressChangeAcknowledgement;
+import ca.bc.gov.addresschange.api.struct.v1.SdgSubmission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
 
-@RestController
-@Tag(name = "SDG", description = "Single Digital Gateway")
-public class SdgWebhookController {
-    private final SdgNormalizationService normalizer;
-
-    public SdgWebhookController(SdgNormalizationService normalizer) {
-        this.normalizer = normalizer;
-    }
-
+@RequestMapping(URL.ADDRESS)
+@Tag(name = "Address", description = "Address change submissions")
+public interface AddressEndpoint {
     @PostMapping(
-            path = "/sdg/webhook",
+            path = URL.SDG,
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.ACCEPTED)
@@ -43,7 +37,11 @@ public class SdgWebhookController {
                         content =
                                 @Content(
                                         mediaType = MediaType.APPLICATION_JSON_VALUE,
-                                        schema = @Schema(implementation = Acknowledgement.class))),
+                                        schema =
+                                                @Schema(
+                                                        implementation =
+                                                                AddressChangeAcknowledgement
+                                                                        .class))),
                 @ApiResponse(
                         responseCode = "400",
                         description = "The JSON submission is malformed or fails field validation.",
@@ -54,9 +52,19 @@ public class SdgWebhookController {
                 @ApiResponse(
                         responseCode = "415",
                         description = "The request content type is not application/json.",
-                        content = @Content)
+                        content =
+                                @Content(
+                                        mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                        schema = @Schema(implementation = ProblemDetail.class))),
+                @ApiResponse(
+                        responseCode = "500",
+                        description = "An unexpected error occurred.",
+                        content =
+                                @Content(
+                                        mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                                        schema = @Schema(implementation = ProblemDetail.class)))
             })
-    public Acknowledgement receive(
+    AddressChangeAcknowledgement acceptSdgSubmission(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             required = true,
                             description = "SDG submission envelope and address change form fields.",
@@ -66,20 +74,5 @@ public class SdgWebhookController {
                                             schema = @Schema(implementation = SdgSubmission.class)))
                     @Valid
                     @RequestBody
-                    SdgSubmission submission) {
-        var requestId = UUID.randomUUID();
-        var normalized = normalizer.normalize(requestId, submission);
-        return new Acknowledgement(normalized.requestId());
-    }
-
-    @Schema(
-            description =
-                    "Acknowledgement identifying this request within the Address Change service.")
-    public record Acknowledgement(
-            @Schema(
-                            description =
-                                    "UUID assigned by the Address Change service when the webhook receives the request.",
-                            example = "7c825573-3df5-4e63-b376-ef7a4057369d",
-                            requiredMode = Schema.RequiredMode.REQUIRED)
-                    UUID requestId) {}
+                    SdgSubmission submission);
 }
