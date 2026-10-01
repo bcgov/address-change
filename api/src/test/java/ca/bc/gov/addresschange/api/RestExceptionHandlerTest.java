@@ -68,7 +68,9 @@ class RestExceptionHandlerTest {
     @RestController
     static class OtherController {
         @PostMapping("/test/other")
-        public void submit(@Valid @RequestBody OtherSubmission submission) {}
+        public void submit(@Valid @RequestBody OtherSubmission submission) {
+            // Intentionally empty because this test endpoint only exercises request validation.
+        }
 
         @GetMapping("/test/missing")
         public void missing() {
