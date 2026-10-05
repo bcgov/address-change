@@ -32,7 +32,7 @@ class SdgWebhookTest {
     private HttpResponse<String> post(String body) throws Exception {
         var request =
                 HttpRequest.newBuilder(
-                                URI.create("http://localhost:" + port + "/api/v1/address/sdg"))
+                                URI.create("http://localhost:" + port + "/api/v1/sdg/address"))
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();

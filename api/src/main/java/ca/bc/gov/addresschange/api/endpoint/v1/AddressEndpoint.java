@@ -17,11 +17,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
-@RequestMapping(URL.ADDRESS)
+@RequestMapping(URL.SDG)
 @Tag(name = "Address", description = "Address change submissions")
 public interface AddressEndpoint {
     @PostMapping(
-            path = URL.SDG,
+            path = URL.ADDRESS,
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.ACCEPTED)

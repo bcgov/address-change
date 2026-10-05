@@ -35,7 +35,8 @@ class OpenApiSpecTest {
         assertThat(document.get("paths").isObject()).isTrue();
         assertThat(document.get("paths").has("/actuator/health")).isFalse();
         assertThat(document.get("paths").has("/sdg/webhook")).isFalse();
-        var webhook = document.get("paths").get("/api/v1/address/sdg").get("post");
+        assertThat(document.get("paths").has("/api/v1/address/sdg")).isFalse();
+        var webhook = document.get("paths").get("/api/v1/sdg/address").get("post");
         assertThat(webhook.get("operationId").asString()).isEqualTo("acceptSdgSubmission");
         assertThat(webhook.get("responses").has("202")).isTrue();
         assertThat(webhook.get("requestBody").get("required").asBoolean()).isTrue();

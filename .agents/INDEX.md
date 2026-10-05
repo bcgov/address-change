@@ -14,8 +14,8 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `api/src/main/java/ca/bc/gov/addresschange/api/AddressChangeApiApplication.java` | Spring Boot entry point and component-scan root. |
 | `api/src/main/resources/application.yaml` | Port, application name, health exposure, and probes. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/HealthEndpointTest.java` | HTTP health/probe and endpoint exposure tests. |
-| `api/src/main/java/ca/bc/gov/addresschange/api/constants/v1/URL.java` | Shared v1 base path and SDG route suffix. |
-| `api/src/main/java/ca/bc/gov/addresschange/api/endpoint/v1/` | Versioned HTTP mappings and OpenAPI contracts; SDG uses POST /api/v1/address/sdg. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/constants/v1/URL.java` | Shared v1 SDG base path and address route suffix. |
+| `api/src/main/java/ca/bc/gov/addresschange/api/endpoint/v1/` | Versioned HTTP mappings and OpenAPI contracts; SDG uses POST /api/v1/sdg/address. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/controller/v1/` | Implementations of the v1 endpoint contracts. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/exception/` | API-wide safe ProblemDetail responses for validation, HTTP errors, and unexpected failures. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/service/v1/` | SDG payload normalization into the Address Change contract. |
@@ -50,7 +50,7 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `.env.example` | Shared template for the local port; copy to ignored `.env`. |
 | `.dockerignore` | Container build context exclusions. |
 | `.gitignore` | Generated output, local tooling, and editor exclusions. |
-| `.gitattributes` | Keeps shell scripts on Linux-compatible LF line endings. |
+| `.gitattributes` | Keeps Java and shell files on LF line endings and the Windows Maven Wrapper on CRLF. |
 | `docs/` | Astro/Starlight docs; Node 22.19+ required. Run npm ci then npm run dev or npm run build here. |
 | `docs/astro.config.mjs` | Navigation, BC government theme, and OpenAPI plugin configuration. |
 | `docs/src/content/docs/index.md` | Basic Address Change documentation landing page. |

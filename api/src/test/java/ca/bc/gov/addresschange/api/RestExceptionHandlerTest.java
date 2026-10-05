@@ -52,8 +52,8 @@ class RestExceptionHandlerTest {
 
     @Test
     void preservesHttpStatusesAndMethodHeaders() throws Exception {
-        assertProblem(send("/api/v1/address/sdg", "POST", "text/plain", "PRIVATE"), 415);
-        var unsupportedMethod = send("/api/v1/address/sdg", "PUT", "application/json", "{}");
+        assertProblem(send("/api/v1/sdg/address", "POST", "text/plain", "PRIVATE"), 415);
+        var unsupportedMethod = send("/api/v1/sdg/address", "PUT", "application/json", "{}");
         assertProblem(unsupportedMethod, 405);
         assertThat(unsupportedMethod.headers().firstValue("Allow").orElse("")).contains("POST");
         assertProblem(send("/test/missing", "GET", "application/json", ""), 404);
