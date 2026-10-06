@@ -26,7 +26,7 @@ public final class LogHelper {
                         failed || response.getStatus() >= 400 ? "failure" : "success")
                 .addKeyValue("event.duration", duration)
                 .addKeyValue("http.request.method", request.getMethod())
-                .addKeyValue("http.response.status_code", failed ? 500 : response.getStatus())
+                .addKeyValue("http.response.status_code", response.getStatus())
                 .addKeyValue("url.path", request.getRequestURI())
                 .log("HTTP request completed");
     }

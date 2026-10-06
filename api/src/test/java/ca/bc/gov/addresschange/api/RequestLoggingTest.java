@@ -72,6 +72,46 @@ class RequestLoggingTest {
     }
 
     @Test
+    void preservesResponseStatusWhenProcessingThrows() {
+        var logger =
+                (Logger)
+                        LoggerFactory.getLogger(
+                                ca.bc.gov.addresschange.api.logging.LogHelper.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            // Also cover an exception before a failure status is assigned: outcome alone is
+            // failure.
+            for (int status : new int[] {200, 401, 403}) {
+                var request = new MockHttpServletRequest("GET", "/test");
+                var response = new MockHttpServletResponse();
+                org.junit.jupiter.api.Assertions.assertThrows(
+                        jakarta.servlet.ServletException.class,
+                        () ->
+                                new RequestResponseFilter()
+                                        .doFilter(
+                                                request,
+                                                response,
+                                                (_, _) -> {
+                                                    response.setStatus(status);
+                                                    throw new jakarta.servlet.ServletException(
+                                                            "PRIVATE");
+                                                }));
+                var json =
+                        new EcsLogFormatter(new MockEnvironment()).format(appender.list.getLast());
+                var event = JsonMapper.builder().build().readTree(json);
+                assertThat(event.get("http.response.status_code").asInt()).isEqualTo(status);
+                assertThat(event.get("event.outcome").asString()).isEqualTo("failure");
+                assertThat(json).doesNotContain("PRIVATE");
+            }
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test
     void generatesCorrelationAndCleansUpAfterUnhandledFailure() {
         var request = new MockHttpServletRequest("GET", "/missing");
         request.addHeader("Correlation-Id", "unsafe identifier");
