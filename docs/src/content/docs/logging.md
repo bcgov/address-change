@@ -22,7 +22,19 @@ Set `SERVICE_ID`, `SERVICE_VERSION`, and `SERVICE_ENVIRONMENT` in deployment con
 
 Bodies, query strings, cookies, authorization headers, exception messages and stack traces are excluded to avoid logging personal addresses and credentials. Request paths and application-authored messages are logged; developers must keep personal data out of paths and log messages. Any future payload logging needs an explicit field allowlist and a justified privacy/retention policy.
 
-There are currently no downstream HTTP clients or messaging workflows. When added, propagate the correlation/client context and emit the corresponding completion events from LOC-7077 at the actual integration boundaries.
+## Downstream correlation propagation
+
+Inject Spring Boot's `RestClient.Builder` into service constructors and build reusable clients from it:
+
+```java
+public ReferenceService(RestClient.Builder builder) {
+    this.client = builder.baseUrl("https://reference-service").build();
+}
+```
+
+`CorrelationRestClientCustomizer` automatically sends `Correlation-Id` from MDC's `http.request.id` on each synchronous call. It reads the value when executing the request, so a reused client follows each incoming request's context and replaces any conflicting correlation header. With no MDC correlation, it adds no header and leaves an explicitly configured header alone. It does not forward caller identity or credentials.
+
+Use the injected builder: direct `RestClient.create()` / `RestClient.builder()` and other HTTP libraries bypass this customization. Async executors need explicit MDC propagation. Outbound completion logging and messaging propagation remain future integration work; there are no domain callouts yet.
 
 ## Configurable log levels
 
