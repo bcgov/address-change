@@ -26,11 +26,15 @@ class RequestLoggingTest {
         appender.start();
         logger.addAppender(appender);
         MDC.put("existing", "preserve");
+        MDC.put("labels.sdx_request_id", "outer-request");
         try {
             var request = new MockHttpServletRequest("POST", "/api/v1/sdg/address");
-            request.addHeader("X-Correlation-ID", "correlation-123");
-            request.addHeader("X-Client-ID", "calling-system");
-            request.addHeader("X-Request-ID", "gateway-123");
+            request.addHeader("Correlation-Id", "correlation-123");
+            request.addHeader("x-client-id", "MIN.CITZ.SDG");
+            request.addHeader("X-Service-Id", "MIN.LOC.ADDRESS-CHANGE.v1");
+            request.addHeader("X-Request-ID", "undocumented-request");
+            request.addHeader("X-Edge-Token", "PRIVATE.token.signature");
+            request.addHeader("Content-Digest", "sha-256=:PRIVATE:");
             request.addHeader("Authorization", "Bearer PRIVATE");
             request.setQueryString("address=PRIVATE");
             request.setContent("PRIVATE".getBytes());
@@ -41,11 +45,13 @@ class RequestLoggingTest {
                             response,
                             (_, _) -> {
                                 assertThat(MDC.get("http.request.id")).isEqualTo("correlation-123");
-                                assertThat(response.getHeader("X-Correlation-ID"))
+                                assertThat(response.getHeader("Correlation-Id"))
                                         .isEqualTo("correlation-123");
                                 response.setStatus(400);
                             });
-            assertThat(MDC.getCopyOfContextMap()).containsOnlyKeys("existing");
+            assertThat(MDC.getCopyOfContextMap())
+                    .containsOnlyKeys("existing", "labels.sdx_request_id")
+                    .containsEntry("labels.sdx_request_id", "outer-request");
             var json = new EcsLogFormatter(new MockEnvironment()).format(appender.list.getFirst());
             assertThat(json).doesNotContain("PRIVATE", "Authorization", "existing");
             var event = JsonMapper.builder().build().readTree(json);
@@ -53,8 +59,12 @@ class RequestLoggingTest {
             assertThat(event.get("event.duration").isNumber()).isTrue();
             assertThat(event.get("event.category").isArray()).isTrue();
             assertThat(event.get("event.outcome").asString()).isEqualTo("failure");
-            assertThat(event.get("labels").get("sdx_request_id").asString())
-                    .isEqualTo("gateway-123");
+            assertThat(event.get("client.id").asString()).isEqualTo("MIN.CITZ.SDG");
+            assertThat(event.get("labels").get("sdx_service_id").asString())
+                    .isEqualTo("MIN.LOC.ADDRESS-CHANGE.v1");
+            assertThat(event.get("labels").has("sdx_request_id")).isFalse();
+            assertThat(json)
+                    .doesNotContain("undocumented-request", "Content-Digest", "X-Edge-Token");
         } finally {
             MDC.clear();
             logger.detachAppender(appender);
@@ -64,7 +74,7 @@ class RequestLoggingTest {
     @Test
     void generatesCorrelationAndCleansUpAfterUnhandledFailure() {
         var request = new MockHttpServletRequest("GET", "/missing");
-        request.addHeader("X-Correlation-ID", "unsafe identifier");
+        request.addHeader("Correlation-Id", "unsafe identifier");
         var response = new MockHttpServletResponse();
         org.junit.jupiter.api.Assertions.assertThrows(
                 jakarta.servlet.ServletException.class,
@@ -79,7 +89,7 @@ class RequestLoggingTest {
         assertThat(
                         java.util.UUID.fromString(
                                 java.util.Objects.requireNonNull(
-                                        response.getHeader("X-Correlation-ID"))))
+                                        response.getHeader("Correlation-Id"))))
                 .isNotNull();
         assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
     }

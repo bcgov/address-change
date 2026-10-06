@@ -6,18 +6,19 @@ The API writes one JSON object per console line for collection by the OpenShift 
 
 `RequestResponseFilter` establishes MDC before synchronous servlet processing and restores the previous context in a finally block. `LogHelper` emits one completion event including errors and missing routes. Duration is a number in nanoseconds; category/type are arrays. Ordinary SLF4J logs receive the same service and request context through `EcsLogFormatter`. Async servlet endpoints are not currently implemented; adding them requires async completion and context propagation support.
 
-Header assumptions pending the SDX production contract:
+Inbound headers follow the [SDX Data Access Protocol, Edge to IS Service request](https://developer.gov.bc.ca/docs/default/component/aps-infra-platform-docs/reference/sdx/data-access-protocol/#edge-to-is-service-request):
 
 | Header | Log field |
 | --- | --- |
-| `X-Correlation-ID` | `http.request.id`, `labels.loc_correlation_id`; generated UUID if absent/invalid, echoed before processing |
-| `X-Client-ID` | `client.id` |
-| `X-Request-ID` | `labels.sdx_request_id` |
-| `X-Service-ID` | `labels.sdx_service_id` |
+| `Correlation-Id` | `http.request.id`, `labels.loc_correlation_id`; generated UUID if absent/invalid, echoed before processing |
+| `X-Client-Id` | `client.id` |
+| `X-Service-Id` | `labels.sdx_service_id` |
 
-Identifiers must contain at most 128 ASCII letters, digits, or `._:/-` and start with a letter/digit. Headers are unverified caller metadata, not authenticated identity. JWTs and E-Edge-Token are never decoded for logging. Confirm header names and trust boundaries with SDX before relying on these fields as audit identity.
+HTTP header names are case-insensitive. Identifiers must contain at most 128 ASCII letters, digits, or `._:/-` and start with a letter/digit. Missing or invalid optional identity fields are omitted. These values are logging metadata and do not authenticate a caller; deployment must establish the SDX gateway trust boundary separately.
 
-Set `SERVICE_ID`, `SERVICE_VERSION`, and `SERVICE_ENVIRONMENT` in deployment configuration; environment defaults to `unspecified`. Service name comes from `spring.application.name`.
+The protocol also forwards `Authorization`, `X-Edge-Token`, and `Content-Digest`; the logging filter does not record or parse those values. `request_id` is an `X-Edge-Token` claim, not a standalone `X-Request-ID` header. Accordingly, `labels.sdx_request_id` is not populated until a verified token integration is implemented. `X-Correlation-ID` is not used; the supported correlation header is `Correlation-Id`. Missing headers remain acceptable for local requests and health probes.
+
+Set `SERVICE_ID`, `SERVICE_VERSION`, and `SERVICE_ENVIRONMENT` in deployment configuration; environment defaults to `LOCAL` in both the base configuration and local profile. Deployment workflows inject `DEV`, `TEST`, or `PROD` into the required `SERVICE_ENVIRONMENT` ConfigMap parameter. The deployment imports that value through `envFrom`, and the formatter writes it as `service.environment`. Service name comes from `spring.application.name`.
 
 Bodies, query strings, cookies, authorization headers, exception messages and stack traces are excluded to avoid logging personal addresses and credentials. Request paths and application-authored messages are logged; developers must keep personal data out of paths and log messages. Any future payload logging needs an explicit field allowlist and a justified privacy/retention policy.
 

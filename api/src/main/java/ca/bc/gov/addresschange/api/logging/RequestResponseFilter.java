@@ -16,7 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 @NullMarked
 public class RequestResponseFilter extends OncePerRequestFilter {
-    public static final String CORRELATION_HEADER = "X-Correlation-ID";
+    public static final String CORRELATION_HEADER = "Correlation-Id";
 
     @Override
     protected void doFilterInternal(
@@ -30,9 +30,10 @@ public class RequestResponseFilter extends OncePerRequestFilter {
             if (correlation == null) correlation = UUID.randomUUID().toString();
             MDC.put("http.request.id", correlation);
             MDC.put("labels.loc_correlation_id", correlation);
-            putHeader(request, "X-Client-ID", "client.id");
-            putHeader(request, "X-Request-ID", "labels.sdx_request_id");
-            putHeader(request, "X-Service-ID", "labels.sdx_service_id");
+            putHeader(request, "X-Client-Id", "client.id");
+            // request_id is an edge-token claim, not a documented standalone header.
+            MDC.remove("labels.sdx_request_id");
+            putHeader(request, "X-Service-Id", "labels.sdx_service_id");
             response.setHeader(CORRELATION_HEADER, correlation);
             chain.doFilter(request, response);
             failed = false;

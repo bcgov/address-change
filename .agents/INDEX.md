@@ -15,7 +15,7 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `api/src/main/resources/application.yaml` | Port, application name, health probes, and ECS console logging/service metadata. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/logging/` | Request correlation filter, HTTP completion LogHelper, and ECS JSON formatter. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/RequestLoggingTest.java` | Typed log fields, privacy exclusions, correlation, and MDC cleanup checks. |
-| `docs/src/content/docs/logging.md` | SIEM format, header assumptions, privacy rules, and integration limitations. |
+| `docs/src/content/docs/logging.md` | SIEM format, documented SDX header mappings, privacy rules, and integration limitations. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/HealthEndpointTest.java` | HTTP health/probe and endpoint exposure tests. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/constants/v1/URL.java` | Shared v1 SDG base path and address route suffix. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/endpoint/v1/` | Versioned HTTP mappings and OpenAPI contracts; SDG uses POST /api/v1/sdg/address. |
@@ -48,7 +48,7 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `Dockerfile.dev` | Local Maven development image; production packaging is separate. |
 | `compose.yml` | Local API, optional formatter service, health check, source mounts, and Maven cache. |
 | `tools/openshift/api-deployment.yaml` | Parameterized OpenShift Deployment, Service, health probes, and horizontal autoscaler. |
-| `tools/openshift/config-map.yaml` | Parameterized application ConfigMap with root, application, and Spring logging thresholds. |
+| `tools/openshift/config-map.yaml` | Parameterized application ConfigMap with deployment environment and root, application, and Spring logging thresholds. |
 | `tools/openshift/pod-disruption-budget.yaml` | Optional parameterized availability policy for TEST and PROD deployments with multiple replicas. |
 | `.env.example` | Shared template for the local port; copy to ignored `.env`. |
 | `.dockerignore` | Container build context exclusions. |

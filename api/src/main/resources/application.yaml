@@ -1,4 +1,6 @@
 spring:
+  main:
+    banner-mode: console
   application:
     name: address-change-api
 server:
@@ -27,4 +29,4 @@ logging:
       service:
         id: ${SERVICE_ID:address-change-api}
         version: ${SERVICE_VERSION:0.0.1-SNAPSHOT}
-        environment: ${SERVICE_ENVIRONMENT:unspecified}
+        environment: ${SERVICE_ENVIRONMENT:LOCAL}

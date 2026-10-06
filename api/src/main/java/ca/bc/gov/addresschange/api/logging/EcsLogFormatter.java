@@ -21,7 +21,6 @@ public class EcsLogFormatter implements StructuredLogFormatter<ILoggingEvent> {
     public String format(ILoggingEvent event) {
         var fields = new LinkedHashMap<String, Object>();
         fields.put("@timestamp", event.getInstant().toString());
-        fields.put("ecs.version", "9.4.0");
         fields.put("log.level", event.getLevel().toString());
         fields.put("log.logger", event.getLoggerName());
         fields.put("process.thread.name", event.getThreadName());
@@ -36,8 +35,7 @@ public class EcsLogFormatter implements StructuredLogFormatter<ILoggingEvent> {
                         "logging.structured.ecs.service.version", "0.0.1-SNAPSHOT"));
         fields.put(
                 "service.environment",
-                environment.getProperty(
-                        "logging.structured.ecs.service.environment", "unspecified"));
+                environment.getProperty("logging.structured.ecs.service.environment", "LOCAL"));
         var labels = new LinkedHashMap<String, Object>();
         event.getMDCPropertyMap()
                 .forEach(
@@ -54,6 +52,7 @@ public class EcsLogFormatter implements StructuredLogFormatter<ILoggingEvent> {
         if (event.getThrowableProxy() != null) {
             fields.put("error.type", event.getThrowableProxy().getClassName());
         }
+        fields.put("ecs.version", "9.4.0");
         return mapper.writeValueAsString(fields) + "\n";
     }
 }

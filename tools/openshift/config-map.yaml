@@ -20,6 +20,9 @@ parameters:
   - name: SPRING_BOOT_AUTOCONFIG_LOG_LEVEL
     description: Spring Boot auto-configuration logging threshold
     value: "INFO"
+  - name: SERVICE_ENVIRONMENT
+    description: Deployment environment (DEV, TEST, PROD) for ECS service.environment
+    required: true
 objects:
   - apiVersion: v1
     kind: ConfigMap
@@ -28,6 +31,7 @@ objects:
       labels:
         app: "${APP_NAME}"
     data:
+      SERVICE_ENVIRONMENT: "${SERVICE_ENVIRONMENT}"
       ROOT_LOG_LEVEL: "${ROOT_LOG_LEVEL}"
       APP_LOG_LEVEL: "${APP_LOG_LEVEL}"
       SPRING_WEB_LOG_LEVEL: "${SPRING_WEB_LOG_LEVEL}"
