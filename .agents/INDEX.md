@@ -16,7 +16,6 @@ Use this index to locate information and decide where changes belong. Paths are 
 | `api/src/main/java/ca/bc/gov/addresschange/api/logging/` | Request correlation filter, RestClient correlation propagation, HTTP completion LogHelper, and ECS JSON formatter. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/CorrelationCalloutTest.java` | Injected RestClient propagation across requests and context cleanup checks. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/RequestLoggingTest.java` | Typed log fields, privacy exclusions, correlation, and MDC cleanup checks. |
-| `docs/src/content/docs/logging.md` | SIEM format, documented SDX header mappings, privacy rules, and integration limitations. |
 | `api/src/test/java/ca/bc/gov/addresschange/api/HealthEndpointTest.java` | HTTP health/probe and endpoint exposure tests. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/constants/v1/URL.java` | Shared v1 SDG base path and address route suffix. |
 | `api/src/main/java/ca/bc/gov/addresschange/api/endpoint/v1/` | Versioned HTTP mappings and OpenAPI contracts; SDG uses POST /api/v1/sdg/address. |
