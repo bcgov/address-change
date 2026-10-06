@@ -39,7 +39,14 @@ public class RequestResponseFilter extends OncePerRequestFilter {
             failed = false;
         } finally {
             try {
-                LogHelper.logHttpCompletion(request, response, System.nanoTime() - start, failed);
+                // exclude repetitive actuator calls like liveness probes, etc.
+                var actuatorPath = request.getContextPath() + "/actuator";
+                var requestPath = request.getRequestURI();
+                if (!requestPath.equals(actuatorPath)
+                        && !requestPath.startsWith(actuatorPath + "/")) {
+                    LogHelper.logHttpCompletion(
+                            request, response, System.nanoTime() - start, failed);
+                }
             } finally {
                 if (previous == null) MDC.clear();
                 else MDC.setContextMap(previous);
