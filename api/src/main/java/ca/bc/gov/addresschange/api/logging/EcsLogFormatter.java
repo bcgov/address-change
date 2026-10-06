@@ -32,7 +32,8 @@ public class EcsLogFormatter implements StructuredLogFormatter<ILoggingEvent> {
         fields.put(
                 "service.version",
                 environment.getProperty(
-                        "logging.structured.ecs.service.version", "0.0.1-SNAPSHOT"));
+                        "logging.structured.ecs.service.version",
+                        environment.getProperty("spring.application.version", "unknown")));
         fields.put(
                 "service.environment",
                 environment.getProperty("logging.structured.ecs.service.environment", "LOCAL"));
