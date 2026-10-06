@@ -2,6 +2,13 @@
 name: OpenAPI Spec
 
 on:
+  workflow_call:
+    inputs:
+      bypass_lint:
+        description: "Bypass SDX lint failures (enriched spec is still uploaded)"
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       bypass_lint:
@@ -141,7 +148,7 @@ jobs:
         working-directory: .github/workflows/util
 
       - name: Validate OpenAPI structure and SDX rules
-        continue-on-error: ${{ inputs.bypass_lint }}
+        continue-on-error: ${{ inputs.bypass_lint || false }}
         run: npm run lint:openapi:generated
         working-directory: .github/workflows/util
 

@@ -41,6 +41,14 @@ on:
       - '.github/workflows/**'
 
 jobs:
+  # Temporary until we move into production.
+  openapi-spec:
+    name: Generate OpenAPI spec after DEV deployment
+    needs: build-and-deploy-dev
+    permissions:
+      contents: read
+    uses: ./.github/workflows/openapi-spec.yml
+
   build-and-deploy-dev:
     name: Build and deploy to OpenShift DEV
     runs-on: ubuntu-24.04
@@ -50,7 +58,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
 
       - name: Login to Artifactory
         uses: redhat-actions/podman-login@v2
