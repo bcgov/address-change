@@ -6,8 +6,10 @@ import ca.bc.gov.addresschange.api.struct.v1.AddressChangeAcknowledgement;
 import ca.bc.gov.addresschange.api.struct.v1.SdgSubmission;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class AddressController implements AddressEndpoint {
@@ -15,6 +17,7 @@ public class AddressController implements AddressEndpoint {
 
     @Override
     public AddressChangeAcknowledgement acceptSdgSubmission(SdgSubmission submission) {
+        log.trace("SDG Submission endpoint called");
         var requestId = UUID.randomUUID();
         var normalized = normalizer.normalize(requestId, submission);
         return new AddressChangeAcknowledgement(normalized.getRequestId());

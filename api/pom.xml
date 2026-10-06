@@ -15,6 +15,10 @@
   <description>Address Change Spring Boot API boilerplate</description>
   <properties>
     <java.version>25</java.version>
+    <!-- Security fixes newer than Boot 4.1.1's managed baseline. Revisit on Boot upgrades. -->
+    <logback.version>1.6.5</logback.version>
+    <jackson-bom.version>3.1.7</jackson-bom.version>
+    <tomcat.version>11.0.26</tomcat.version>
     <spotless.version>3.10.2</spotless.version>
     <google-java-format.version>1.30.0</google-java-format.version>
     <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
@@ -22,6 +26,10 @@
     <swagger-annotations.version>2.2.55</swagger-annotations.version>
   </properties>
   <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-restclient</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>

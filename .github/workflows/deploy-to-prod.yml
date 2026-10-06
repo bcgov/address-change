@@ -60,6 +60,12 @@ jobs:
           oc: "4"
 
       - name: Deploy
+        env:
+          SERVICE_ENVIRONMENT: "PROD"
+          ROOT_LOG_LEVEL: ${{ vars.ROOT_LOG_LEVEL || 'INFO' }}
+          APP_LOG_LEVEL: ${{ vars.APP_LOG_LEVEL || 'INFO' }}
+          SPRING_WEB_LOG_LEVEL: ${{ vars.SPRING_WEB_LOG_LEVEL || 'INFO' }}
+          SPRING_BOOT_AUTOCONFIG_LOG_LEVEL: ${{ vars.SPRING_BOOT_AUTOCONFIG_LOG_LEVEL || 'INFO' }}
         run: |
           set -euo pipefail
           # Login to OpenShift and select project
@@ -81,7 +87,12 @@ jobs:
 
           # Process and apply non-sensitive application configuration
           oc process -f tools/openshift/config-map.yaml \
+            -p SERVICE_ENVIRONMENT="${SERVICE_ENVIRONMENT}" \
             -p APP_NAME="${APP_NAME}" \
+            -p ROOT_LOG_LEVEL="${ROOT_LOG_LEVEL}" \
+            -p APP_LOG_LEVEL="${APP_LOG_LEVEL}" \
+            -p SPRING_WEB_LOG_LEVEL="${SPRING_WEB_LOG_LEVEL}" \
+            -p SPRING_BOOT_AUTOCONFIG_LOG_LEVEL="${SPRING_BOOT_AUTOCONFIG_LOG_LEVEL}" \
             | oc apply -f -
 
           # Apply the PROD availability policy

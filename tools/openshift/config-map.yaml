@@ -8,6 +8,21 @@ parameters:
   - name: APP_NAME
     description: Application name used to identify the ConfigMap
     required: true
+  - name: ROOT_LOG_LEVEL
+    description: Default log threshold (TRACE, DEBUG, INFO, WARN, ERROR, OFF)
+    value: "INFO"
+  - name: APP_LOG_LEVEL
+    description: Address Change application log threshold
+    value: "INFO"
+  - name: SPRING_WEB_LOG_LEVEL
+    description: Spring Web log threshold
+    value: "INFO"
+  - name: SPRING_BOOT_AUTOCONFIG_LOG_LEVEL
+    description: Spring Boot auto-configuration logging threshold
+    value: "INFO"
+  - name: SERVICE_ENVIRONMENT
+    description: Deployment environment (DEV, TEST, PROD) for ECS service.environment
+    required: true
 objects:
   - apiVersion: v1
     kind: ConfigMap
@@ -15,4 +30,9 @@ objects:
       name: "${APP_NAME}-config"
       labels:
         app: "${APP_NAME}"
-    data: {}
+    data:
+      SERVICE_ENVIRONMENT: "${SERVICE_ENVIRONMENT}"
+      ROOT_LOG_LEVEL: "${ROOT_LOG_LEVEL}"
+      APP_LOG_LEVEL: "${APP_LOG_LEVEL}"
+      SPRING_WEB_LOG_LEVEL: "${SPRING_WEB_LOG_LEVEL}"
+      SPRING_BOOT_AUTOCONFIG_LOG_LEVEL: "${SPRING_BOOT_AUTOCONFIG_LOG_LEVEL}"
