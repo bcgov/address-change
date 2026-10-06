@@ -2,6 +2,10 @@
 name: OpenAPI Spec
 
 on:
+  # Temporary trigger on deploy to dev while we are still in development and not ready for production release.
+  workflow_run:
+    workflows: ["Build & Deploy to DEV"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       bypass_lint:
@@ -39,6 +43,7 @@ env:
 jobs:
   enrich-and-lint:
     name: Generate, Enrich & Lint OpenAPI Spec
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -47,6 +52,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -141,7 +148,7 @@ jobs:
         working-directory: .github/workflows/util
 
       - name: Validate OpenAPI structure and SDX rules
-        continue-on-error: ${{ inputs.bypass_lint }}
+        continue-on-error: ${{ inputs.bypass_lint || false }}
         run: npm run lint:openapi:generated
         working-directory: .github/workflows/util
 
