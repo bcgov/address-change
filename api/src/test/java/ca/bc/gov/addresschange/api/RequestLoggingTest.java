@@ -112,6 +112,45 @@ class RequestLoggingTest {
     }
 
     @Test
+    void skipsActuatorCompletionLogsAndStillCleansUpContext() throws Exception {
+        var logger =
+                (Logger)
+                        LoggerFactory.getLogger(
+                                ca.bc.gov.addresschange.api.logging.LogHelper.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            for (var path :
+                    java.util.List.of(
+                            "/actuator",
+                            "/actuator/health",
+                            "/actuator/health/liveness",
+                            "/actuator/health/readiness",
+                            "/actuator/metrics",
+                            "/actuator/prometheus")) {
+                var request = new MockHttpServletRequest("GET", "/app" + path);
+                request.setContextPath("/app");
+                var response = new MockHttpServletResponse();
+                new RequestResponseFilter()
+                        .doFilter(request, response, (_, _) -> response.setStatus(200));
+                assertThat(appender.list).isEmpty();
+                assertThat(response.getHeader("Correlation-Id")).isNotBlank();
+                assertThat(MDC.getCopyOfContextMap()).isNullOrEmpty();
+            }
+            for (var path : java.util.List.of("/api/v1/sdg/address", "/actuator-like")) {
+                var request = new MockHttpServletRequest("GET", path);
+                new RequestResponseFilter()
+                        .doFilter(request, new MockHttpServletResponse(), (_, _) -> {});
+            }
+            assertThat(appender.list).hasSize(2);
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test
     void generatesCorrelationAndCleansUpAfterUnhandledFailure() {
         var request = new MockHttpServletRequest("GET", "/missing");
         request.addHeader("Correlation-Id", "unsafe identifier");
