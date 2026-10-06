@@ -14,3 +14,17 @@ management:
       show-details: never
       probes:
         enabled: true
+logging:
+  level:
+    root: ${ROOT_LOG_LEVEL:INFO}
+    ca.bc.gov.addresschange.api: ${APP_LOG_LEVEL:${ROOT_LOG_LEVEL:INFO}}
+    org.springframework.web: ${SPRING_WEB_LOG_LEVEL:${ROOT_LOG_LEVEL:INFO}}
+    org.springframework.boot.autoconfigure.logging: ${SPRING_BOOT_AUTOCONFIG_LOG_LEVEL:${ROOT_LOG_LEVEL:INFO}}
+  structured:
+    format:
+      console: ca.bc.gov.addresschange.api.logging.EcsLogFormatter
+    ecs:
+      service:
+        id: ${SERVICE_ID:address-change-api}
+        version: ${SERVICE_VERSION:0.0.1-SNAPSHOT}
+        environment: ${SERVICE_ENVIRONMENT:unspecified}

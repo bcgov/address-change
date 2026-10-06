@@ -88,6 +88,11 @@ jobs:
 
         # https://github.com/redhat-actions/oc-login#readme
       - name: Deploy
+        env:
+          ROOT_LOG_LEVEL: ${{ vars.ROOT_LOG_LEVEL || 'INFO' }}
+          APP_LOG_LEVEL: ${{ vars.APP_LOG_LEVEL || 'DEBUG' }}
+          SPRING_WEB_LOG_LEVEL: ${{ vars.SPRING_WEB_LOG_LEVEL || 'INFO' }}
+          SPRING_BOOT_AUTOCONFIG_LOG_LEVEL: ${{ vars.SPRING_BOOT_AUTOCONFIG_LOG_LEVEL || 'INFO' }}
         run: |
           set -euo pipefail
           # Login to OpenShift and select project
@@ -105,6 +110,10 @@ jobs:
           # Process and apply non-sensitive application configuration
           oc process -f tools/openshift/config-map.yaml \
             -p APP_NAME="${APP_NAME}" \
+            -p ROOT_LOG_LEVEL="${ROOT_LOG_LEVEL}" \
+            -p APP_LOG_LEVEL="${APP_LOG_LEVEL}" \
+            -p SPRING_WEB_LOG_LEVEL="${SPRING_WEB_LOG_LEVEL}" \
+            -p SPRING_BOOT_AUTOCONFIG_LOG_LEVEL="${SPRING_BOOT_AUTOCONFIG_LOG_LEVEL}" \
             | oc apply -f -
 
           # TODO add any secret config here (no sensitive values)
