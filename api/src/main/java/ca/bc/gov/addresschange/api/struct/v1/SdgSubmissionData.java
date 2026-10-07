@@ -17,7 +17,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-@Schema(name = "SdgSubmissionData", description = "Address change form fields.")
+@Schema(
+        name = "SdgSubmissionData",
+        description = "Address change form fields supplied by the Single Digital Gateway.")
 public class SdgSubmissionData {
 
     @Schema(description = "Whether the citizen requests notification to ICBC.", example = "true")
@@ -30,7 +32,7 @@ public class SdgSubmissionData {
     @NotNull
     private Boolean notifyMsp;
 
-    @Schema(description = "Previous country code.", example = "CA")
+    @Schema(description = "Country code of the previous address.", example = "CA")
     @JsonProperty("old_country")
     @NotBlank
     private String oldCountry;
@@ -54,17 +56,19 @@ public class SdgSubmissionData {
     @NotBlank
     private String oldProvince;
 
-    @Schema(description = "Previous postal code.", example = "V8V 1X4")
+    @Schema(description = "Postal code of the previous address.", example = "V8V 1X4")
     @JsonProperty("old_postal_code")
     @NotBlank
     private String oldPostalCode;
 
-    @Schema(description = "New country code.", example = "CA")
+    @Schema(description = "Country code of the new address.", example = "CA")
     @JsonProperty("new_country")
     @NotBlank
     private String newCountry;
 
-    @Schema(description = "New primary address line.", example = "1234 Example St")
+    @Schema(
+            description = "Primary street address line of the new address.",
+            example = "1234 Example St")
     @JsonProperty("new_address_line_one")
     @NotBlank
     private String newAddressLineOne;
@@ -73,17 +77,17 @@ public class SdgSubmissionData {
     @JsonProperty("new_address_line_two")
     private String newAddressLineTwo;
 
-    @Schema(description = "New city or locality.", example = "Victoria")
+    @Schema(description = "City or locality of the new address.", example = "Victoria")
     @JsonProperty("new_city")
     @NotBlank
     private String newCity;
 
-    @Schema(description = "New province or region.", example = "BC")
+    @Schema(description = "Province or region of the new address.", example = "BC")
     @JsonProperty("new_province")
     @NotBlank
     private String newProvince;
 
-    @Schema(description = "New postal code.", example = "V8V 1X4")
+    @Schema(description = "Postal code of the new address.", example = "V8V 1X4")
     @JsonProperty("new_postal_code")
     @NotBlank
     private String newPostalCode;
@@ -99,11 +103,11 @@ public class SdgSubmissionData {
     @NotBlank
     private String firstName;
 
-    @Schema(description = "First middle initial.", example = "A")
+    @Schema(description = "Initial of the person's first middle name.", example = "A")
     @JsonProperty("first_middle_name_initial")
     private String firstMiddleNameInitial;
 
-    @Schema(description = "Second middle initial.", example = "B")
+    @Schema(description = "Initial of the person's second middle name.", example = "B")
     @JsonProperty("second_middle_name_initial")
     private String secondMiddleNameInitial;
 
@@ -125,7 +129,9 @@ public class SdgSubmissionData {
     @JsonProperty("email_address")
     private String emailAddress;
 
-    @Schema(description = "Daytime contact number.", example = "+1 (250) 867-5309")
+    @Schema(
+            description = "Daytime phone number supplied for contact.",
+            example = "+1 (250) 867-5309")
     @JsonProperty("daytime_phone")
     private String daytimePhone;
 

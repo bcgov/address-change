@@ -24,7 +24,8 @@ env:
   # ── API Metadata ──────────────────────────────────────────────────────────
   API_TITLE: "Address Change API"
   API_DESCRIPTION: >-
-    TBD
+    Accepts address change form submissions from the Single Digital Gateway,
+    validates and normalizes the supplied fields, and returns a request identifier.
 
   # ── Servers ───────────────────────────────────────────────────────────────
   SERVER_PROD_URL: ""
@@ -132,7 +133,31 @@ jobs:
               if os.environ.get('EXTERNAL_DOCS_DESC'):
                   external['description'] = os.environ['EXTERNAL_DOCS_DESC']
 
-          # Preserve all API paths, tags, components, and security declarations.
+          # Path summaries describe the resource; operation summaries describe actions.
+          spec['paths']['/api/v1/sdg/address']['summary'] = 'SDG address change submissions'
+
+          # Reuse the synthetic submission fixture for complete, contract-valid examples.
+          submission = json.loads(Path('api/src/test/resources/sdg-submission.json').read_text(encoding='utf-8'))
+          # Omit absent optional strings: OpenAPI 3.0 does not infer nullable from Java.
+          submission['data'] = {key: value for key, value in submission['data'].items() if value is not None}
+          schemas = spec['components']['schemas']
+          schemas['SdgSubmission']['example'] = submission
+          schemas['SdgSubmissionData']['example'] = submission['data']
+          schemas['AddressChangeAcknowledgement']['example'] = {
+              'requestId': '7c825573-3df5-4e63-b376-ef7a4057369d',
+          }
+          schemas['ProblemDetail']['description'] = (
+              'RFC 9457 problem details describing an unsuccessful API request.'
+          )
+          schemas['ProblemDetail']['example'] = {
+              'type': 'about:blank',
+              'title': 'Bad Request',
+              'status': 400,
+              'detail': 'The JSON submission is malformed or fails field validation.',
+              'instance': 'http://localhost:8080/api/v1/sdg/address',
+          }
+
+          # Preserve the application payload field names and security declarations.
           path.write_text(json.dumps(spec, indent=2) + '\n', encoding='utf-8')
           PY
 
