@@ -33,32 +33,18 @@ rules:
       functionOptions:
         match: ^3\.\d+\.\d+$
 
-  # SDX: OAuth2 security scheme required for SDX Gateway authorization.
-  sdx-oauth2-security-scheme:
-    description: >-
-      SDX Gateway authorization must be documented with at least one OAuth2
-      security scheme because the contract must explicitly define the
-      relevant gateway scopes. OpenID Connect schemes should not be the
-      primary scheme for SDX Gateway authorization.
-    message: "No OAuth2 security scheme found; SDX Gateway authorization should be documented with an OAuth2 scheme."
-    severity: warn
-    given: $.components.securitySchemes.*
-    then:
-      field: type
-      function: pattern
-      functionOptions:
-        match: ^oauth2$
+  # TODO: Restore the SDX OAuth2 checks and security-declaration guidance when
+  # gateway OAuth2 flows, scopes, and operation security are implemented.
+  # The current API contract must not claim authentication it does not provide.
+  sdx-oauth2-security-schemes: off
+  sdx-oauth2-scope-descriptions-consistent: off
+  sdx-operation-security-scopes: off
 
-  # SDX: Security declarations should reference the security scheme.
-  sdx-security-declaration:
-    description: >-
-      SDX APIs should use security declarations to identify the SDX Gateway
-      OAuth2 scheme and any scopes required to access operations.
-    message: >-
-      Consider adding global or operation-level security declarations
-      for SDX Gateway authorization.
-    severity: warn
-    given: $
-    then:
-      field: security
-      function: truthy
+overrides:
+  # SDG supplies these snake_case names. Preserve the external payload contract;
+  # camelCase validation remains enabled for every other schema.
+  - files:
+      - "../../../api/target/openapi.json#/components/schemas/SdgSubmissionData/properties"
+      - "../../../docs/public/openapi.json#/components/schemas/SdgSubmissionData/properties"
+    rules:
+      schema-property-camel-case: off

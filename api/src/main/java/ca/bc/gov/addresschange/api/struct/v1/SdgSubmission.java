@@ -36,7 +36,7 @@ public class SdgSubmission {
     @NotNull
     private Instant submittedAt;
 
-    @Schema(description = "SDG form journey.", example = "RESIDENTIAL")
+    @Schema(description = "Form journey selected for the SDG submission.", example = "RESIDENTIAL")
     @NotBlank
     private String journey;
 
