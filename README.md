@@ -80,7 +80,7 @@ Setup takes an hour or less.  Scripts in [`scripts/`](./scripts/) do the GitHub 
     ```bash
     scripts/setup-openshift.sh --plate abc123          # preview, then add --apply
     ```
-6. **GitHub environments, secrets and variables**: creates the `test` and `prod` environments (PROD with required reviewers if you name them; without `--reviewers` it reports the current ones), and sets the `OC_NAMESPACE` variable and `OC_TOKEN` and `DB_PASSWORD` secrets for pull requests (repository level), TEST and PROD, plus the `OC_SERVER` variable.  Without `--plate` it reads the plate from existing `OC_NAMESPACE` variables.  It won't generate a `DB_PASSWORD` for a namespace that already has a database, since a new password would lock the app out.  Secrets that are already set are never overwritten.  Secret values are piped from `oc` or `openssl` straight into `gh secret set`; they're never printed or written to disk, and previews show only the secret's name.
+6. **GitHub environments, secrets and variables**: creates the `test` and `prod` environments (PROD with required reviewers if you name them; without `--reviewers` it reports the current ones), and sets the `OC_NAMESPACE` variable and `OC_TOKEN` secret for pull requests (repository level), TEST and PROD, plus the repository `OC_SERVER` variable. `DB_PASSWORD` is generated only at repository level for disposable PR databases; loc-tools manages TEST/PROD database credentials in OpenShift.  Without `--plate` it reads the plate from existing `OC_NAMESPACE` variables.  It won't generate a `DB_PASSWORD` for a namespace that already has a database, since a new password would lock the app out.  Secrets that are already set are never overwritten.  Secret values are piped from `oc` or `openssl` straight into `gh secret set`; they're never printed or written to disk, and previews show only the secret's name.
     ```bash
     scripts/setup-environments.sh --plate abc123 --reviewers alice,bcgov/my-team   # preview, then add --apply
     ```
@@ -103,10 +103,8 @@ Workflows read these values.  Repository-level values are used by pull request d
 | none        | `secrets.DB_PASSWORD`  | PR database password                            |
 | test        | `vars.OC_NAMESPACE`    | TEST namespace, `<plate>-test`                  |
 | test        | `secrets.OC_TOKEN`     | TEST service token                              |
-| test        | `secrets.DB_PASSWORD`  | TEST database password                          |
 | prod        | `vars.OC_NAMESPACE`    | PROD namespace, `<plate>-prod`                  |
 | prod        | `secrets.OC_TOKEN`     | PROD service token                              |
-| prod        | `secrets.DB_PASSWORD`  | PROD database password                          |
 | prod (opt)  | `vars.ROUTE_HOST`      | Vanity URL hostname (repository or environment) |
 | prod (opt)  | `secrets.TLS_CERTIFICATE` | Leaf certificate PEM for vanity URL          |
 | prod (opt)  | `secrets.TLS_PRIVATE_KEY` | Private key PEM for vanity URL               |
@@ -114,7 +112,7 @@ Workflows read these values.  Repository-level values are used by pull request d
 | none (opt)  | `secrets.SONAR_TOKEN_BACKEND`, `secrets.SONAR_TOKEN_FRONTEND` | See [SonarCloud](#code-quality-with-sonarcloud) |
 | none (opt)  | `secrets.SYSDIG_API_TOKEN` | PROD alert sync                             |
 
-`DB_PASSWORD` is generated separately for each environment.  Don't change it after the first deploy: PostgreSQL keeps its first password.
+`DB_PASSWORD` is used only by disposable PR databases. Don't change it while PR databases are active: PostgreSQL retains the password set when each database was initialized. TEST/PROD use the runtime and migration Secrets created by loc-tools in OpenShift.
 
 **Copied the template before `OC_NAMESPACE` became a variable?**  Move it: `gh variable set OC_NAMESPACE --body <plate>-dev`, and the same with `--env test` / `--env prod` (or run `scripts/setup-environments.sh --apply`).  The old secret is unused and can be deleted.
 

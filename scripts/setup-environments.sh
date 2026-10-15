@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # GitHub environments, secrets and variables for the deploy workflows:
 #   repository (pull requests): variables OC_NAMESPACE=<plate>-dev, OC_SERVER; secrets OC_TOKEN, DB_PASSWORD
-#   test: variable OC_NAMESPACE=<plate>-test; secrets OC_TOKEN, DB_PASSWORD
-#   prod: variable OC_NAMESPACE=<plate>-prod; secrets OC_TOKEN, DB_PASSWORD; required reviewers from --reviewers
+#   test: variable OC_NAMESPACE=<plate>-test; secret OC_TOKEN
+#   prod: variable OC_NAMESPACE=<plate>-prod; secret OC_TOKEN; required reviewers from --reviewers
 # OC_TOKEN is piped from the `github-actions-token` Secret made by setup-openshift.sh
 # straight into `gh secret set`; secret values are never printed or saved.
-# DB_PASSWORD is generated, different for each environment.
+# DB_PASSWORD is generated only at repository level for disposable PR databases.
+# TEST/PROD database credentials are managed by the loc-tools Helm charts.
 #
 # Uses your own `gh` (repo admin) and `oc` logins.  Without --apply it checks the
 # setup and exits non-zero if anything is missing; it confirms secrets exist but
@@ -95,8 +96,8 @@ has_database() { # <namespace>
   oc get statefulsets,pvc -n "$1" -o name 2>/dev/null \
     | grep -qE "/(data-)?${REPO#*/}-[a-z0-9]+-database(-0)?$"
 }
-db_blocked() { # <scope> <namespace>
-  ! has_secret "$1" DB_PASSWORD && has_database "$2"
+db_blocked() { # <scope> <namespace>; only PRs use GitHub DB_PASSWORD
+  [ "$1" = repo ] && ! has_secret "$1" DB_PASSWORD && has_database "$2"
 }
 
 # Tokens come from setup-openshift.sh; check before changing anything
@@ -205,7 +206,10 @@ for scope in repo test prod; do
   if has_secret "$scope" OC_NAMESPACE; then
     echo "  note: old OC_NAMESPACE secret for ${scope} is no longer used; delete it when you like"
   fi
-  for name in OC_TOKEN DB_PASSWORD; do secret "$scope" "$name" "$ns"; done
+  secret "$scope" OC_TOKEN "$ns"
+  if [ "$scope" = repo ]; then
+    secret "$scope" DB_PASSWORD "$ns"
+  fi
 done
 have="$(gh variable get OC_SERVER -R "$REPO" 2>/dev/null || true)"
 if [ "$have" = "$SERVER" ]; then
