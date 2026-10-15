@@ -4,11 +4,9 @@ import type { Page } from 'playwright'
 
 export const dashboard_page = async (page: Page) => {
   await page.goto(baseURL)
+  await expect(page.getByRole('heading', { level: 2, name: 'Address change' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Government of British Columbia' })).toBeVisible()
   await expect(page.getByText('QuickStart OpenShift')).toBeVisible()
-  await expect(page.getByText('Employee ID')).toBeVisible()
-  await expect(page.getByText('Employee Name')).toBeVisible()
-  await expect(page.getByText('Employee Email')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Home' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'About gov.bc.ca' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Disclaimer' })).toBeVisible()
@@ -16,5 +14,4 @@ export const dashboard_page = async (page: Page) => {
   await expect(page.getByRole('link', { name: 'Accessibility' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Copyright' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Contact us' })).toBeVisible()
-  await expect(page.getByText('John.ipsum@test.com').first()).toBeVisible()
 }

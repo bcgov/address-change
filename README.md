@@ -33,6 +33,32 @@ This repository provides a template to rapidly deploy a modern web application s
     * Backend: TypeScript, Nest.js
 
 
+## Database
+
+All environments use PostgreSQL 18. Local development, PR previews, and CI use
+`postgres:18.6`; TEST/PROD use Patroni managed by `loc-tools`. PR databases are
+temporary and separate for each preview.
+
+Before deploying TEST/PROD, install the loc-tools Patroni, database bootstrap,
+and backup charts in the same namespace as the application.
+
+| TEST/PROD setting | Value |
+| --- | --- |
+| Host | `address-change-db-patroni:5432` |
+| Database / schema | `address_change` |
+| Runtime Secret | `address-change-db-runtime` |
+| Migration Secret | `address-change-db-migration` |
+| Secret keys | `username`, `password` |
+
+Patroni connections require TLS. Only PR deployments need the GitHub
+`db_password` secret.
+
+Run locally with `docker compose up --build`. Add application migrations to
+`migrations/sql/`; it starts empty. `/api/health` checks database connectivity.
+
+Validate deployment templates with `python scripts/tests/test_database_templates.py`
+(requires Python, PyYAML, and `oc`).
+
 # Setup
 
 Setup takes an hour or less.  Scripts in [`scripts/`](./scripts/) do the GitHub and OpenShift parts.  Each one previews its changes by default, makes them only with `--apply`, and is safe to re-run: it changes only what differs and leaves everything else alone.  Running any of them without `--apply` verifies the setup: it ends with `All set: nothing to change.`, or exits non-zero with the number of things to change.  It confirms secrets exist but can't verify their values.  Run them yourself, with your own logins.

@@ -1,13 +1,8 @@
 FROM flyway/flyway:13-alpine
 
-# Copy migrations
+# Application migrations are added to sql/ as the database model is developed.
 COPY ./sql /flyway/sql
-
-# Non-root user
 RUN adduser -D app
 USER app
 
-# Health check and startup
-HEALTHCHECK CMD info
-# Adding repair to see if it fixes migration issues.
-CMD ["info", "migrate", "repair"] 
+CMD ["info", "migrate", "info"]

@@ -45,7 +45,7 @@ jobs:
     with:
       target: ${{ github.event.number }}
       tag: ${{ github.event.pull_request.head.sha }}
-      triggers: ('backend/', 'frontend/', 'migrations/', 'common/', '.github/workflows/pr-open.yml')
+      triggers: ('backend/', 'frontend/', 'migrations/', 'common/', '.github/workflows/pr-open.yml', '.github/workflows/reusable-deploy.yml')
 
   tests:
     name: Tests
