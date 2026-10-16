@@ -48,7 +48,7 @@ jobs:
           sonar_args: >
             -Dsonar.exclusions=**/coverage/**,**/node_modules/**,**/*spec.ts
             -Dsonar.organization=bcgov-sonarcloud
-            -Dsonar.projectKey=quickstart-openshift_backend
+            -Dsonar.projectKey=address-change_backend
             -Dsonar.sources=src
             -Dsonar.test.inclusions=**/*spec.ts
             -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
@@ -77,7 +77,7 @@ jobs:
           sonar_args: >
             -Dsonar.exclusions=**/coverage/**,**/node_modules/**,**/*spec.ts,**/*test.tsx,**/routeTree.gen.ts
             -Dsonar.organization=bcgov-sonarcloud
-            -Dsonar.projectKey=quickstart-openshift_frontend
+            -Dsonar.projectKey=address-change_frontend
             -Dsonar.sources=src
             -Dsonar.test.inclusions=**/*spec.ts,**/*test.tsx
             -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
