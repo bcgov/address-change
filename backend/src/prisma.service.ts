@@ -9,7 +9,7 @@ const DB_USER = process.env.POSTGRES_USER || 'postgres'
 const DB_PWD = encodeURIComponent(process.env.POSTGRES_PASSWORD || 'default')
 const DB_PORT = process.env.POSTGRES_PORT || 5432
 const DB_NAME = process.env.POSTGRES_DATABASE || 'postgres'
-const DB_SCHEMA = process.env.POSTGRES_SCHEMA || 'users'
+const DB_SCHEMA = process.env.POSTGRES_SCHEMA || 'address_change'
 const PGBOUNCER_URL = process.env.PGBOUNCER_URL
 const dataSourceURL = PGBOUNCER_URL
   ? `${PGBOUNCER_URL}?schema=${DB_SCHEMA}&pgbouncer=true`
@@ -28,7 +28,12 @@ class PrismaService extends PrismaClientWithLogs implements OnModuleInit, OnModu
     if (PrismaService.instance) {
       return PrismaService.instance
     }
-    const pool = new Pool({ connectionString: dataSourceURL })
+    const pool = new Pool({
+      connectionString: dataSourceURL,
+      // Patroni's internal certificate is self-signed. Match libpq sslmode=require:
+      // encrypt the connection without requiring a public CA certificate.
+      ssl: process.env.POSTGRES_SSLMODE === 'require' ? { rejectUnauthorized: false } : undefined,
+    })
     const adapter = new PrismaPg(pool, { schema: DB_SCHEMA })
     super({
       adapter,

@@ -25,10 +25,9 @@ export async function bootstrap() {
     prefix: 'v',
   })
   const config = new DocumentBuilder()
-    .setTitle('Users example')
-    .setDescription('The user API description')
+    .setTitle('Address Change API')
+    .setDescription('Address change application API')
     .setVersion('1.0')
-    .addTag('users')
     .build()
 
   const document = SwaggerModule.createDocument(app, config)

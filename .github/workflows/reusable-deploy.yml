@@ -23,8 +23,8 @@ on:
 
     secrets:
       db_password:
-        description: Database password
-        required: true
+        description: Password for disposable PR databases only
+        required: false
       oc_token:
         description: OpenShift token
         required: true
@@ -45,39 +45,103 @@ jobs:
     steps:
       - uses: bcgov/action-deployer-openshift@e2d60eb9cacceb89c3b97d8dcf0a2c460eea5eab # v4.2.3
         id: deploy
-        env:
-          DB_PASSWORD: ${{ secrets.db_password }}
         with:
           file: common/openshift.init.yml
           oc_namespace: ${{ vars.OC_NAMESPACE }}
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
-          # Secret + NetworkPolicies: create if missing. Postgres ignores
-          # POSTGRES_PASSWORD after first boot; restamping the Secret desyncs Flyway.
-          # New NetworkPolicy names still apply; existing NP specs do not update.
+          overwrite: true
+          parameters: -p ZONE="${{ inputs.target }}"
+            -p NAME="${{ github.event.repository.name }}"
+          triggers: ${{ inputs.triggers }}
+          debug: true
+
+      - name: Check Patroni prerequisites
+        if: inputs.environment == 'test' || inputs.environment == 'prod'
+        uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_server: ${{ vars.oc_server }}
+          oc_token: ${{ secrets.oc_token }}
+          commands: |
+            set -euo pipefail
+            oc get service address-change-db-patroni -o name
+            for secret in address-change-db-runtime address-change-db-migration; do
+              for key in username password; do
+                value=$(oc get secret "$secret" -o "jsonpath={.data.$key}")
+                if [ -z "$value" ]; then
+                  echo "::error::$secret is missing $key; deploy loc-tools bootstrap first."
+                  exit 1
+                fi
+                unset value
+              done
+            done
+
+  database:
+    name: Deploy disposable PR database
+    if: inputs.environment != 'test' && inputs.environment != 'prod'
+    needs: [init]
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check disposable database password
+        env:
+          DB_PASSWORD: ${{ secrets.db_password }}
+        run: |
+          if [ -z "$DB_PASSWORD" ]; then
+            echo "::error::db_password is required for disposable PR databases."
+            exit 1
+          fi
+      - uses: bcgov/action-deployer-openshift@e2d60eb9cacceb89c3b97d8dcf0a2c460eea5eab # v4.2.3
+        env:
+          DB_PASSWORD: ${{ secrets.db_password }}
+        with:
+          file: common/openshift.database-init.yml
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_server: ${{ vars.oc_server }}
+          oc_token: ${{ secrets.oc_token }}
+          # Retain the password of an already initialized disposable database.
           overwrite: false
           parameters: -p DB_PASSWORD="$DB_PASSWORD"
             -p ZONE="${{ inputs.target }}"
             -p NAME="${{ github.event.repository.name }}"
           triggers: ${{ inputs.triggers }}
-          debug: true
+      - uses: bcgov/action-deployer-openshift@e2d60eb9cacceb89c3b97d8dcf0a2c460eea5eab # v4.2.3
+        with:
+          file: common/openshift.database.yml
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_server: ${{ vars.oc_server }}
+          oc_token: ${{ secrets.oc_token }}
+          parameters: -p DB_PVC_SIZE="256Mi"
+            -p ZONE="${{ inputs.target }}"
+            -p NAME="${{ github.event.repository.name }}"
+          triggers: ${{ inputs.triggers }}
 
   deploy:
     name: Deploy (${{ matrix.name }})
     environment: ${{ inputs.environment }}
-    needs: [init]
+    needs: [init, database]
+    # The database job is intentionally skipped for Patroni environments.
+    if: ${{ !cancelled() && needs.init.result == 'success' && (needs.database.result == 'success' || needs.database.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       matrix:
-        name: [database, backend, frontend]
+        name: [backend, frontend]
         include:
-          - name: database
-            file: common/openshift.database.yml
-            parameters: -p DB_PVC_SIZE="256Mi"
           - name: backend
             file: backend/openshift.deploy.yml
-            parameters: -p IMAGE_TAG="${{ inputs.tag }}"
+            parameters: >-
+              -p IMAGE_TAG="${{ inputs.tag }}"
+              -p DB_HOST="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'address-change-db-patroni' || format('{0}-{1}-database', github.event.repository.name, inputs.target) }}"
+              -p DB_NAME="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'address_change' || 'app' }}"
+              -p DB_RUNTIME_SECRET="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'address-change-db-runtime' || format('{0}-{1}-database', github.event.repository.name, inputs.target) }}"
+              -p DB_MIGRATION_SECRET="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'address-change-db-migration' || format('{0}-{1}-database', github.event.repository.name, inputs.target) }}"
+              -p DB_USERNAME_KEY="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'username' || 'database-user' }}"
+              -p DB_PASSWORD_KEY="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'password' || 'database-password' }}"
+              -p DB_SSLMODE="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'require' || 'disable' }}"
+              -p DB_CLIENT="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'address-change' || 'disposable' }}"
           - name: frontend
             file: frontend/openshift.deploy.yml
             parameters: -p IMAGE_TAG="${{ inputs.tag }}"

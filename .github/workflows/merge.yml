@@ -34,7 +34,6 @@ jobs:
     needs: [init]
     uses: ./.github/workflows/reusable-deploy.yml
     secrets:
-      db_password: ${{ secrets.db_password }}
       oc_token: ${{ secrets.oc_token }}
     with:
       environment: test
@@ -55,7 +54,6 @@ jobs:
     needs: [tests, init]
     uses: ./.github/workflows/reusable-deploy.yml
     secrets:
-      db_password: ${{ secrets.db_password }}
       oc_token: ${{ secrets.oc_token }}
     with:
       environment: prod

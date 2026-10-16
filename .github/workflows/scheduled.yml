@@ -109,7 +109,7 @@ jobs:
           allow_issue_writing: true
           issue_title: "ZAP Security Report"
           token: ${{ secrets.GITHUB_TOKEN }}
-          target: https://${{ github.event.repository.name }}-test.apps.silver.devops.gov.bc.ca
+          target: https://${{ github.event.repository.name }}-test.apps.gold.devops.gov.bc.ca
 
   load-tests:
     name: Load
@@ -122,8 +122,8 @@ jobs:
       - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
       - uses: grafana/run-k6-action@4082a08c7e40cf6d65863911077dfb60ae0a4f04 # v1.5.0
         env:
-          BACKEND_URL: https://${{ github.event.repository.name }}-test.apps.silver.devops.gov.bc.ca/api
-          FRONTEND_URL: https://${{ github.event.repository.name }}-test.apps.silver.devops.gov.bc.ca
+          BACKEND_URL: https://${{ github.event.repository.name }}-test.apps.gold.devops.gov.bc.ca/api
+          FRONTEND_URL: https://${{ github.event.repository.name }}-test.apps.gold.devops.gov.bc.ca
         with:
           path: ./common/tests/load/${{ matrix.name }}-test.js
           flags: --vus 100 --duration 300s

@@ -11,10 +11,11 @@ x-postgres-vars: &postgres-vars
   POSTGRES_USER: *POSTGRES_USER
   POSTGRES_PASSWORD: *POSTGRES_PASSWORD
   POSTGRES_DATABASE: *POSTGRES_DATABASE
+  POSTGRES_SCHEMA: address_change
 
 services:
   database:
-    image: postgis/postgis:17-3.4 # if using crunchy , make sure to align with crunchy version, currently it is at 16 and postgis 3.3
+    image: postgres:18.6
     container_name: database
     environment:
       <<: *postgres-vars
@@ -23,7 +24,7 @@ services:
     ports: ["5432:5432"]
 
   migrations:
-    image: flyway/flyway:13-alpine
+    build: ./migrations
     container_name: migrations
     command: info migrate info
     volumes: ["./migrations/sql:/flyway/sql:ro"]
@@ -31,8 +32,7 @@ services:
       FLYWAY_URL: jdbc:postgresql://database:5432/postgres
       FLYWAY_USER: *POSTGRES_USER
       FLYWAY_PASSWORD: *POSTGRES_PASSWORD
-      FLYWAY_BASELINE_ON_MIGRATE: true
-      FLYWAY_DEFAULT_SCHEMA: users
+      FLYWAY_DEFAULT_SCHEMA: address_change
     depends_on:
       database:
         condition: service_healthy
@@ -41,7 +41,7 @@ services:
     image: schemaspy/schemaspy:7.0.2
     profiles: ["schemaspy"]
     container_name: schemaspy
-    command: -t pgsql11 -db postgres -host database -port 5432 -u postgres -p default -schemas users
+    command: -t pgsql11 -db postgres -host database -port 5432 -u postgres -p default -schemas address_change
     depends_on:
       migrations:
         condition: service_completed_successfully
@@ -51,7 +51,7 @@ services:
     container_name: backend
     depends_on:
       migrations:
-        condition: service_started
+        condition: service_completed_successfully
     entrypoint: sh -c "npm i && npm run start:dev"
     environment:
       <<: *postgres-vars

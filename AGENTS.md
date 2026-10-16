@@ -4,7 +4,9 @@ Repository facts for automated coding assistants. Teams may edit or remove this 
 
 ## Layout
 - `backend/` (NestJS, Prisma), `frontend/` (Vite, React, Caddy), `migrations/` (Flyway SQL in `migrations/sql/`)
-- OpenShift templates (not Helm): `common/openshift.init.yml`, `common/openshift.database.yml`, `backend/openshift.deploy.yml`, `frontend/openshift.deploy.yml`
+- PostgreSQL major version is 18 across local development, PR previews, CI, and Patroni TEST/PROD. Official PostgreSQL clients/images are pinned to 18.6; Spilo/backup patch levels must be verified independently.
+- TEST/PROD consume Patroni provisioned in the same namespace by `loc-tools`; PRs retain disposable databases. Application migrations target `address_change`. `migrations/sql/` starts empty; add application-specific migrations there.
+- OpenShift templates (not Helm): `common/openshift.init.yml`, `common/openshift.database.yml`, `common/openshift.database-init.yml` (PR database credentials/policy), `backend/openshift.deploy.yml`, `frontend/openshift.deploy.yml`
 - Workflows: `.github/workflows/` (PR deploys via `reusable-deploy.yml`, tests via `reusable-tests.yml`); integration and load tests in `common/tests/`
 
 ## Build, test, run

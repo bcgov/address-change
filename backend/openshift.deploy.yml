@@ -20,7 +20,7 @@ parameters:
     description: Organization name
     value: bcgov
   - name: DOMAIN
-    value: apps.silver.devops.gov.bc.ca
+    value: apps.gold.devops.gov.bc.ca
   - name: MIN_REPLICAS
     description: The minimum amount of replicas for the horizontal pod autoscaler.
     value: "2"
@@ -37,6 +37,27 @@ parameters:
   - name: LOG_LEVEL
     description: Application log level (debug|info|warn|error)
     value: "info"
+  - name: DB_HOST
+    description: PostgreSQL primary Service in this namespace
+    required: true
+  - name: DB_PORT
+    value: "5432"
+  - name: DB_NAME
+    value: app
+  - name: DB_RUNTIME_SECRET
+    required: true
+  - name: DB_MIGRATION_SECRET
+    required: true
+  - name: DB_USERNAME_KEY
+    value: username
+  - name: DB_PASSWORD_KEY
+    value: password
+  - name: DB_SSLMODE
+    description: disable for disposable PR databases; require for Patroni
+    value: disable
+  - name: DB_CLIENT
+    description: Label used by the loc-tools Patroni ingress policy
+    value: disposable
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -58,6 +79,7 @@ objects:
           labels:
             app: ${NAME}-${ZONE}
             deployment: ${NAME}-${ZONE}-${COMPONENT}
+            database-client: ${DB_CLIENT}
         spec:
           terminationGracePeriodSeconds: 30
           affinity:
@@ -79,9 +101,9 @@ objects:
                   echo "Waiting for database to be reachable..."
                   max_retries=30
                   attempt=1
-                  until nc -z -v -w3 ${NAME}-${ZONE}-database 5432; do
+                  until nc -z -v -w3 ${DB_HOST} ${DB_PORT}; do
                     if [ "$attempt" -ge "$max_retries" ]; then
-                      echo "ERROR: Database ${NAME}-${ZONE}-database:5432 is not reachable after ${max_retries} attempts." >&2
+                      echo "ERROR: Database ${DB_HOST}:${DB_PORT} is not reachable after ${max_retries} attempts." >&2
                       exit 1
                     fi
                     echo "Database not ready (attempt ${attempt}/${max_retries}), sleeping..."
@@ -105,26 +127,21 @@ objects:
               imagePullPolicy: Always
               env:
                 - name: POSTGRES_DATABASE
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-name
+                  value: ${DB_NAME}
                 - name: FLYWAY_URL
-                  value: jdbc:postgresql://${NAME}-${ZONE}-database:5432/$(POSTGRES_DATABASE)
+                  value: jdbc:postgresql://${DB_HOST}:${DB_PORT}/$(POSTGRES_DATABASE)?sslmode=${DB_SSLMODE}
                 - name: FLYWAY_USER
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-user
+                      name: ${DB_MIGRATION_SECRET}
+                      key: ${DB_USERNAME_KEY}
                 - name: FLYWAY_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-password
+                      name: ${DB_MIGRATION_SECRET}
+                      key: ${DB_PASSWORD_KEY}
                 - name: FLYWAY_DEFAULT_SCHEMA
-                  value: "users"
-                - name: FLYWAY_BASELINE_ON_MIGRATE
-                  value: "true"
+                  value: "address_change"
               resources:
                 requests:
                   cpu: 10m
@@ -151,26 +168,25 @@ objects:
                 - name: LOG_LEVEL
                   value: ${LOG_LEVEL}
                 - name: POSTGRES_HOST
-                  value: ${NAME}-${ZONE}-database
+                  value: ${DB_HOST}
                 - name: POSTGRES_PORT
-                  value: "5432"
+                  value: "${DB_PORT}"
                 - name: POSTGRES_DATABASE
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-name
+                  value: ${DB_NAME}
                 - name: POSTGRES_USER
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-user
+                      name: ${DB_RUNTIME_SECRET}
+                      key: ${DB_USERNAME_KEY}
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-password
+                      name: ${DB_RUNTIME_SECRET}
+                      key: ${DB_PASSWORD_KEY}
+                - name: POSTGRES_SSLMODE
+                  value: ${DB_SSLMODE}
                 - name: POSTGRES_SCHEMA
-                  value: "users"
+                  value: "address_change"
               resources:
                 requests:
                   cpu: ${CPU_REQUEST}
