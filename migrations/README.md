@@ -3,7 +3,10 @@
 `sql/V1__address_change_schema.sql` is the initial application migration for the
 repository's PostgreSQL 18 database. It targets schema `address_change`, works
 with Patroni, requires no extensions or superuser, and follows the existing
-Flyway deployment layout. It creates seven tables and a `request_status` view.
+Flyway deployment layout. V1 creates seven tables and a `request_status` view;
+V2 implements the reviewed design: a shared `status_type` lookup table, stored
+request status, status-based active-request uniqueness, common audit fields and
+transfer-based batch completion. V1 is unchanged to preserve deployed checksums.
 It is a fresh-install migration, not an upgrade of the older experimental
 `address-change-service/db` schema in a different local directory.
 
@@ -24,6 +27,8 @@ For a manually managed fresh database, from the repository root:
 ```sh
 psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
   --file=migrations/sql/V1__address_change_schema.sql
+psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
+  --file=migrations/sql/V2__status_lookup.sql
 psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 \
   --file=migrations/tests/schema_smoke.sql
 ```
@@ -34,6 +39,13 @@ existing tables: it never drops or silently replaces an existing schema.
 Choose Flyway or manual installation for a given database, not both. Manually
 running V1 does not create Flyway history; subsequent adoption requires an
 explicit baseline after verifying the schema.
+
+The `Schema Tests` GitHub workflow uses an isolated PostgreSQL 18.6 service to
+test a fresh install and an upgrade from populated V1. The rollback-only smoke
+test covers status-domain validation, stored summary synchronization, failed
+requests retaining the owner slot, transfer completion, audit timestamps and the
+existing Unicode/integrity checks. `v1_upgrade_fixture.sql` is synthetic committed
+test data for a disposable V1 database only; never run it on a shared environment.
 
 ## Unicode and First Nations characters
 
@@ -71,15 +83,19 @@ submissions a unique violation is possible: roll back and look up the existing
 request before choosing the appropriate response. Never compare ciphertext for
 payload equality, since encryption can use different nonces.
 
-Request status is derived by `address_change.request_status`. The sole extra
-lifecycle column is `closed_at`, used by a partial unique index to guarantee one
-active request per subject. Operation updates lock their parent request and
-automatically close it once all operations are SUCCEEDED or CANCELLED. FAILED,
-UNKNOWN and SENT remain active. Explicitly cancelling outstanding operations
-closes abandoned work without reversing completed updates. New requests can be
-submitted after closure. Closed requests and terminal operations cannot reopen.
-The CLOSED summary may include a mixture of succeeded and cancelled operations;
-always return individual partner results to the UI.
+Request status is stored in `address_change_request.status`. Operation changes
+lock their parent request and synchronize that status in the same transaction.
+The summary view reads the stored status and adds operation counts; it is not a
+second source of status truth. Direct updates to an inconsistent summary are rejected.
+There is no `closed_at` in the final schema. A partial unique index on `owner_sub`
+applies where status is not COMPLETED or CLOSED. FAILED stays active for retries.
+All operations SUCCEEDED means COMPLETED; all terminal with at least one CANCELLED
+means CLOSED. Otherwise priority is PROCESSING, PARTIALLY_COMPLETED,
+PENDING_CONFIRMATION (unknown outcome), PENDING_DELIVERY, then FAILED.
+An intake with no operations yet starts SUBMITTED; complete intake is still
+required at commit. New requests can be submitted after completion/closure.
+Terminal requests and terminal operation statuses cannot reopen. Always show
+individual partner results alongside the overall status.
 
 Use short READ COMMITTED transactions, and never hold the parent lock over a
 network call. Do not grant the application DELETE on operations: only the purge
@@ -90,7 +106,41 @@ every status read and retry, and restrict cancellation/partner administration.
 
 ## API retry
 
-Claim an eligible operation atomically (`UPDATE ... WHERE status = 'FAILED'
+### Status vocabulary
+
+`status_type` uses `(status_category, status_code)` as its primary key. Categories
+are REQUEST, OPERATION, ATTEMPT and BATCH. Generated category columns on the consuming
+tables ensure that, for example, a BATCH-only code cannot be used for an attempt.
+Clients write `status`; do not write generated category columns. The frontend
+does not choose request status. Batches have only one status pair, not a separate
+SFTP status.
+
+Add codes or change display labels through new Flyway migrations. Keep referenced
+codes stable; retire them with `active = false` rather than deleting history.
+The flag is administrative: the API must enforce any policy against new use of
+inactive codes. Foreign keys only enforce that the code exists in its category.
+
+Adding a lookup row does not implement new workflow behaviour. Review the request
+summary calculation, terminal-state triggers, attempt completion checks, partial indexes
+and API retry/transition logic before introducing a new operational status.
+Adding a new terminal request status also requires changing the active-owner index.
+Delivery mode remains constrained text (FLAT_FILE or REALTIME); the team's lookup
+decision concerns statuses, not delivery-mode configuration.
+
+### Audit fields
+
+All eight tables have `created_at`, `created_by`, `updated_at` and `updated_by`.
+A shared `set_updated_at()` trigger runs on every table update, after guard
+triggers. Guards no longer assign timestamps. New audit columns on existing rows
+use migration time and database role as backfill, not historical actor claims.
+For future writes, the API/worker must supply a trusted actor/job ID in the
+by-fields (never accept these fields directly from a browser). Defaults on newly
+added by-fields identify only the database role. The timestamp trigger does not
+infer the human actor or replace `updated_by`.
+
+### Retry processing
+
+Claim an eligible operation atomically (`UPDATE ... SET status = 'IN_PROGRESS' WHERE status = 'FAILED'
 RETURNING operation_id`); proceed only if one row is returned. In the same
 transaction, insert a STARTED attempt with the next attempt number and encrypted
 outbound payload. Commit, call SDX using the current request's token in memory,
@@ -119,11 +169,34 @@ immutable file using its existing batch record, filename and checksum, in line
 with the partner's duplicate-handling contract. API attempt rows are not a file
 transfer-attempt history.
 
-SFTP success means SENT, not necessarily SUCCEEDED. Confirm the actual legacy
-acknowledgement/completion contract with each partner; otherwise requests would
-remain active indefinitely. Only set operation SUCCEEDED when that agreed
-completion criterion is met. Full generated files belong in protected file
-storage, with metadata/checksum here.
+Successful file transfer is the completion boundary: the worker sets batch SENT,
+and a database trigger marks its non-cancelled outstanding operations SUCCEEDED
+and updates their request summaries in the same transaction. No partner
+acknowledgement or proof that records were applied is required. The UI should say
+"Sent to partner", not "Partner records updated". Batch states are BUILDING,
+READY, TRANSFERRING, SENT, FAILED and UNKNOWN. SENT is terminal success; the worker
+must not reset or regenerate a sent batch. Freeze membership before transfer:
+do not attach new operations after marking SENT. Unknown transfer outcomes require
+reconciliation before retry. `record_count` counts detail records, excluding
+headers/trailers. Full files belong in protected storage, with metadata here.
+
+### Diagram alignment / review decisions
+
+- Status lookup tables replace status enums/check lists, as agreed with the team.
+- Stored request status and a status-based owner index replace the V1 derived-only
+  status and `closed_at` design.
+- All diagram audit fields are present; generic update timestamps address review feedback.
+- One batch status replaces SFTP/acknowledgement tracking; SENT completes delivery.
+- Existing billing-address fields are retained because the diagram's
+  `is_billing_address_same = false` needs somewhere to store that address.
+- Existing `height_cm` / `weight_kg` names keep units explicit. Error codes are text;
+  the diagram's Invalid PHN / Address Rejected are examples, not a complete list.
+- Checksum, generated/transferred timestamps and existing integrity rules remain
+  useful implementation details beyond the conceptual diagram. The single batch
+  membership, partner-matching FK and one-started-attempt rule remain unchanged.
+- V2 converts V1 SENT/ACKNOWLEDGED batches to transport success, completes their
+  outstanding operations and backfills stored request status. Legacy in-progress
+  transfers become UNKNOWN for reconciliation.
 
 ## Retention and permissions
 
