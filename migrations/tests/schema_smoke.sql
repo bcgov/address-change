@@ -1,4 +1,4 @@
--- Run after V1 and V2 with psql -X -v ON_ERROR_STOP=1 -f this-file.sql.
+-- Run after V1 with psql -X -v ON_ERROR_STOP=1 -f this-file.sql.
 -- All test data is rolled back, including on failure when psql exits.
 BEGIN;
 DO $$
@@ -13,6 +13,10 @@ DECLARE
   unicode_name text := 'Sḵwx̱wú7mesh ʔə ᐊᓂᔑᓈᐯ';
   actual text;
 BEGIN
+  IF (SELECT count(*) FROM information_schema.triggers
+    WHERE trigger_schema = 'address_change' AND trigger_name = 'z_set_updated_at') <> 8 THEN
+    RAISE EXCEPTION 'Missing shared audit trigger';
+  END IF;
   SELECT partner_id INTO STRICT icbc FROM address_change.partner_system WHERE partner_code = 'ICBC';
   SELECT partner_id INTO STRICT health FROM address_change.partner_system WHERE partner_code = 'HEALTH';
   INSERT INTO address_change.address_change_request

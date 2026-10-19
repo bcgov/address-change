@@ -41,11 +41,3 @@ jobs:
             docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_fresh -v ON_ERROR_STOP=1 --single-transaction < "$migration"
           done
           docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_fresh -v ON_ERROR_STOP=1 < migrations/tests/schema_smoke.sql
-      - name: Upgrade populated V1 and verify
-        run: |
-          docker exec "${{ job.services.postgres.id }}" createdb -U schema_test schema_upgrade
-          docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_upgrade -v ON_ERROR_STOP=1 --single-transaction < migrations/sql/V1__address_change_schema.sql
-          docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_upgrade -v ON_ERROR_STOP=1 < migrations/tests/v1_upgrade_fixture.sql
-          docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_upgrade -v ON_ERROR_STOP=1 --single-transaction < migrations/sql/V2__status_lookup.sql
-          docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_upgrade -v ON_ERROR_STOP=1 < migrations/tests/upgrade_assertions.sql
-          docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_upgrade -v ON_ERROR_STOP=1 < migrations/tests/schema_smoke.sql

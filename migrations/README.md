@@ -3,10 +3,11 @@
 `sql/V1__address_change_schema.sql` is the initial application migration for the
 repository's PostgreSQL 18 database. It targets schema `address_change`, works
 with Patroni, requires no extensions or superuser, and follows the existing
-Flyway deployment layout. V1 creates seven tables and a `request_status` view;
-V2 implements the reviewed design: a shared `status_type` lookup table, stored
+Flyway deployment layout. This single initial migration creates eight tables
+and a `request_status` view, including the shared `status_type` lookup, stored
 request status, status-based active-request uniqueness, common audit fields and
-transfer-based batch completion. V1 is unchanged to preserve deployed checksums.
+transfer-based batch completion. Consolidation was agreed before initial application.
+Once applied to a retained database, do not edit V1; use new versioned migrations.
 It is a fresh-install migration, not an upgrade of the older experimental
 `address-change-service/db` schema in a different local directory.
 
@@ -27,8 +28,6 @@ For a manually managed fresh database, from the repository root:
 ```sh
 psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
   --file=migrations/sql/V1__address_change_schema.sql
-psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
-  --file=migrations/sql/V2__status_lookup.sql
 psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 \
   --file=migrations/tests/schema_smoke.sql
 ```
@@ -41,11 +40,10 @@ running V1 does not create Flyway history; subsequent adoption requires an
 explicit baseline after verifying the schema.
 
 The `Schema Tests` GitHub workflow uses an isolated PostgreSQL 18.6 service to
-test a fresh install and an upgrade from populated V1. The rollback-only smoke
+test a fresh install. The rollback-only smoke
 test covers status-domain validation, stored summary synchronization, failed
 requests retaining the owner slot, transfer completion, audit timestamps and the
-existing Unicode/integrity checks. `v1_upgrade_fixture.sql` is synthetic committed
-test data for a disposable V1 database only; never run it on a shared environment.
+existing Unicode/integrity checks.
 
 ## Unicode and First Nations characters
 
@@ -131,11 +129,10 @@ decision concerns statuses, not delivery-mode configuration.
 
 All eight tables have `created_at`, `created_by`, `updated_at` and `updated_by`.
 A shared `set_updated_at()` trigger runs on every table update, after guard
-triggers. Guards no longer assign timestamps. New audit columns on existing rows
-use migration time and database role as backfill, not historical actor claims.
+triggers. Guards do not assign timestamps.
 For future writes, the API/worker must supply a trusted actor/job ID in the
 by-fields (never accept these fields directly from a browser). Defaults on newly
-added by-fields identify only the database role. The timestamp trigger does not
+by-fields identify only the database role. The timestamp trigger does not
 infer the human actor or replace `updated_by`.
 
 ### Retry processing
@@ -183,7 +180,7 @@ headers/trailers. Full files belong in protected storage, with metadata here.
 ### Diagram alignment / review decisions
 
 - Status lookup tables replace status enums/check lists, as agreed with the team.
-- Stored request status and a status-based owner index replace the V1 derived-only
+- Stored request status and a status-based owner index replace the earlier derived-only
   status and `closed_at` design.
 - All diagram audit fields are present; generic update timestamps address review feedback.
 - One batch status replaces SFTP/acknowledgement tracking; SENT completes delivery.
@@ -194,9 +191,8 @@ headers/trailers. Full files belong in protected storage, with metadata here.
 - Checksum, generated/transferred timestamps and existing integrity rules remain
   useful implementation details beyond the conceptual diagram. The single batch
   membership, partner-matching FK and one-started-attempt rule remain unchanged.
-- V2 converts V1 SENT/ACKNOWLEDGED batches to transport success, completes their
-  outstanding operations and backfills stored request status. Legacy in-progress
-  transfers become UNKNOWN for reconciliation.
+- All agreed changes are created directly by the single initial V1 migration;
+  no intermediate schema, upgrade fixture or data-conversion migration is needed.
 
 ## Retention and permissions
 
