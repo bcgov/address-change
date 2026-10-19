@@ -184,8 +184,8 @@ headers/trailers. Full files belong in protected storage, with metadata here.
   status and `closed_at` design.
 - All diagram audit fields are present; generic update timestamps address review feedback.
 - One batch status replaces SFTP/acknowledgement tracking; SENT completes delivery.
-- Existing billing-address fields are retained because the diagram's
-  `is_billing_address_same = false` needs somewhere to store that address.
+- Submitted addresses contain old and new residential addresses only; billing
+  address fields and the same-as-billing indicator are excluded.
 - Existing `height_cm` / `weight_kg` names keep units explicit. Error codes are text;
   the diagram's Invalid PHN / Address Rejected are examples, not a complete list.
 - Checksum, generated/transferred timestamps and existing integrity rules remain

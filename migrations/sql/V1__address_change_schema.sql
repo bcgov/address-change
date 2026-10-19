@@ -83,16 +83,6 @@ CREATE TABLE address_change.submitted_address (
   new_province text NOT NULL,
   new_postal_code text NOT NULL,
   new_country text NOT NULL,
-  is_billing_address_same boolean NOT NULL,
-  billing_address_line_one text,
-  billing_address_line_two text,
-  billing_city text,
-  billing_province text,
-  billing_postal_code text,
-  billing_country text,
-  CHECK (is_billing_address_same OR (
-    billing_address_line_one IS NOT NULL AND billing_city IS NOT NULL AND
-    billing_province IS NOT NULL AND billing_postal_code IS NOT NULL AND billing_country IS NOT NULL)),
   created_at timestamptz NOT NULL DEFAULT now(),
   created_by text NOT NULL DEFAULT current_user,
   updated_at timestamptz NOT NULL DEFAULT now(),

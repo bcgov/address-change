@@ -26,8 +26,8 @@ BEGIN
     VALUES (r, unicode_name, 'Test', date '1990-01-01');
   INSERT INTO address_change.submitted_address
     (request_id, old_address_line_one, old_city, old_province, old_postal_code, old_country,
-     new_address_line_one, new_city, new_province, new_postal_code, new_country, is_billing_address_same)
-    VALUES (r, unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA', unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA', true);
+     new_address_line_one, new_city, new_province, new_postal_code, new_country)
+    VALUES (r, unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA', unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA');
   INSERT INTO address_change.processing_operation(request_id, partner_id, delivery_mode)
     VALUES (r, icbc, 'FLAT_FILE') RETURNING operation_id INTO op;
   INSERT INTO address_change.processing_operation(request_id, partner_id, delivery_mode)
