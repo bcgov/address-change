@@ -29,8 +29,36 @@ BEGIN
     VALUES (r, unicode_name, 'Test', date '1990-01-01');
   INSERT INTO address_change.submitted_address
     (request_id, old_address_line_one, old_city, old_province, old_postal_code, old_country,
-     new_address_line_one, new_city, new_province, new_postal_code, new_country)
-    VALUES (r, unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA', unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA');
+     new_address_line_one, new_city, new_province, new_postal_code, new_country, is_mailing_address_same)
+    VALUES (r, unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA', unicode_name, 'Test', 'BC', 'V0A 0A0', 'CA', true);
+  IF NOT EXISTS (SELECT 1 FROM address_change.submitted_address
+    WHERE request_id = r AND is_mailing_address_same
+      AND mailing_address_line_one IS NULL AND mailing_address_line_two IS NULL
+      AND mailing_city IS NULL AND mailing_province IS NULL
+      AND mailing_postal_code IS NULL AND mailing_country IS NULL) THEN
+    RAISE EXCEPTION 'Shared residential/mailing choice did not round-trip';
+  END IF;
+  BEGIN
+    UPDATE address_change.submitted_address SET is_mailing_address_same = NULL WHERE request_id = r;
+    RAISE EXCEPTION 'Allowed a missing mailing-address choice';
+  EXCEPTION WHEN not_null_violation THEN NULL;
+  END;
+  -- A distinct mailing address preserves Unicode and does not replace residential.
+  UPDATE address_change.submitted_address
+    SET is_mailing_address_same = false, mailing_address_line_one = 'PO Box 42',
+        mailing_address_line_two = unicode_name, mailing_city = 'Coquitlam',
+        mailing_province = 'BC', mailing_postal_code = 'V3C 2C4', mailing_country = 'CA',
+        updated_at = clock_timestamp(), updated_by = 'test'
+    WHERE request_id = r;
+  IF NOT EXISTS (SELECT 1 FROM address_change.submitted_address
+    WHERE request_id = r AND NOT is_mailing_address_same
+      AND mailing_address_line_one = 'PO Box 42'
+      AND convert_to(mailing_address_line_two, 'UTF8') = convert_to(unicode_name, 'UTF8')
+      AND mailing_city = 'Coquitlam' AND mailing_province = 'BC'
+      AND mailing_postal_code = 'V3C 2C4' AND mailing_country = 'CA'
+      AND convert_to(new_address_line_one, 'UTF8') = convert_to(unicode_name, 'UTF8')) THEN
+    RAISE EXCEPTION 'Separate mailing/residential addresses did not round-trip';
+  END IF;
   INSERT INTO address_change.processing_operation(request_id, partner_id, delivery_mode)
     VALUES (r, icbc, 'FLAT_FILE') RETURNING operation_id INTO op;
   INSERT INTO address_change.processing_operation(request_id, partner_id, delivery_mode)

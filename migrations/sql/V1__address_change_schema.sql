@@ -83,6 +83,13 @@ CREATE TABLE address_change.submitted_address (
   new_province text NOT NULL,
   new_postal_code text NOT NULL,
   new_country text NOT NULL,
+  is_mailing_address_same boolean NOT NULL,
+  mailing_address_line_one text,
+  mailing_address_line_two text,
+  mailing_city text,
+  mailing_province text,
+  mailing_postal_code text,
+  mailing_country text,
   created_at timestamptz NOT NULL DEFAULT now(),
   created_by text NOT NULL DEFAULT current_user,
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -210,3 +217,7 @@ COMMENT ON COLUMN address_change.processing_operation.batch_id IS
   'Single batch membership for MVP. Service locks batch before assignment and freezes membership before file generation; reassignment loses history.';
 COMMENT ON TABLE address_change.submitted_address IS
   'UTF-8 submitted values preserved verbatim. No transliteration or ASCII-only validation. Application keeps snapshots immutable.';
+COMMENT ON COLUMN address_change.submitted_address.is_mailing_address_same IS
+  'Explicit resident choice: true uses the submitted new residential address for mailing; false requires separate mailing fields validated by the API.';
+COMMENT ON COLUMN address_change.submitted_address.mailing_address_line_one IS
+  'New mailing address when different from new residential. Service composes structured street/unit or postal-delivery fields into address lines.';

@@ -33,7 +33,7 @@ database, not both. A manual install does not create Flyway history; adopting
 Flyway afterward requires an explicit, verified baseline.
 
 The Schema Tests workflow uses disposable PostgreSQL 18.6. Its rollback-only
-smoke test checks Unicode, foreign keys, status categories, idempotency, one
+smoke test checks Unicode in residential/mailing addresses, foreign keys, status categories, idempotency, one
 active request, partner/attempt uniqueness, attempt timestamp checks, purge
 cascades and the absence of application triggers. Explicit updates in that test
 demonstrate the schema contract; they do not validate a service implementation.
@@ -143,12 +143,33 @@ in protected storage.
 
 ## Audits, personal information and Unicode
 
+### Residential and mailing address
+
+`submitted_address` contains the old/new residential address and the resident's
+explicit `is_mailing_address_same` choice. This boolean is required with no
+default, so intake must supply the answer. When true, the service uses the new
+residential address for mailing and stores the separate mailing fields as NULL.
+When false, the service requires `mailing_address_line_one`, `mailing_city`,
+`mailing_province`, `mailing_postal_code` and `mailing_country`;
+`mailing_address_line_two` is optional. The database leaves those fields nullable;
+conditional requiredness and contradictory input are validated by the service.
+
+The legacy screen's street number, suffix, unit, name, type and direction are
+composed into the same two-line address structure used for residential data.
+Postal-delivery addresses such as PO boxes can also use these text fields.
+Preserve exact submitted components in the encrypted request snapshot when
+needed by legacy file mappings; do not reconstruct them by splitting address lines.
+The new mailing fields describe the resident-confirmed new mailing address,
+not a separate old mailing address. Billing-address fields remain excluded.
+
+### Audit and encoding
+
 All tables have created_at/by and updated_at/by. Timestamp defaults apply on
 INSERT only. The API/job must explicitly set updated_at and trusted updated_by
 on every UPDATE. Database-role defaults on by-fields identify that role, not
 the resident. Do not accept audit actors directly from the browser.
 
-Names and residential addresses use UTF8 text, preserving First Nations letters,
+Names, residential and mailing addresses use UTF8 text, preserving First Nations letters,
 syllabics and combining characters. Do not apply ASCII-only validation, byte
 truncation or silent transliteration. Opaque subjects/idempotency keys use C
 collation for exact comparison. Confirm frontend fonts and partner-specific
@@ -159,8 +180,8 @@ Payload/identifier bytea columns hold application-provided ciphertext envelopes
 with key version, nonce and authentication tag. They do not encrypt themselves.
 Keep keys outside the database; never include tokens or headers in payload
 snapshots. Other person/address columns remain personal information requiring
-restricted access and platform encryption. Only old/new residential addresses
-are stored; billing fields and the same-address indicator are excluded.
+restricted access and platform encryption. Residential and new mailing addresses
+are stored; billing-address fields are excluded.
 
 ## Retention and provisioning
 
