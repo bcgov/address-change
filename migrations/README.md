@@ -1,29 +1,25 @@
 # Address Change PostgreSQL schema
 
-`sql/V1__address_change_schema.sql` is the initial application migration for the
-repository's PostgreSQL 18 database. It targets schema `address_change`, works
-with Patroni, requires no extensions or superuser, and follows the existing
-Flyway deployment layout. This single initial migration creates eight tables
-and a `request_status` view, including the shared `status_type` lookup, stored
-request status, status-based active-request uniqueness, common audit fields and
-transfer-based batch completion. Consolidation was agreed before initial application.
+`sql/V1__address_change_schema.sql` is the single initial Flyway migration for
+PostgreSQL 18 / Patroni. It creates schema `address_change`, eight tables, status
+and partner seed data, indexes, constraints and a read-only `request_status` view.
+It requires a UTF8 database, no extensions and no superuser.
+
+Workflow belongs to the API/saga. This migration creates no application triggers
+or stored workflow functions. It does not implement the service or saga itself.
 Once applied to a retained database, do not edit V1; use new versioned migrations.
-It is a fresh-install migration, not an upgrade of the older experimental
-`address-change-service/db` schema in a different local directory.
+It is a fresh-install migration, not an upgrade of another experimental schema.
 
-## Run
+## Run and verify
 
-Use the Patroni **primary/write endpoint**, with the project's migration role.
-The database must already exist with UTF8 encoding. Database creation, Patroni,
-backups, TLS, database roles and grants remain platform provisioning concerns.
-
-Normal deployment: use the existing Flyway migration pipeline. Locally:
+Use the Patroni primary/write endpoint and the project's migration role. Use the
+existing Flyway pipeline for deployment. Local deployment uses:
 
 ```sh
 docker compose up --build migrations
 ```
 
-For a manually managed fresh database, from the repository root:
+For an isolated fresh database, from the repository root:
 
 ```sh
 psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 --single-transaction \
@@ -32,185 +28,144 @@ psql "$DATABASE_URL" -X --set=ON_ERROR_STOP=1 \
   --file=migrations/tests/schema_smoke.sql
 ```
 
-Use your approved credential mechanism; do not commit a real connection string.
-The smoke test rolls back all its data. The migration intentionally fails on
-existing tables: it never drops or silently replaces an existing schema.
-Choose Flyway or manual installation for a given database, not both. Manually
-running V1 does not create Flyway history; subsequent adoption requires an
-explicit baseline after verifying the schema.
+Use an approved credential mechanism. Choose Flyway or manual installation for a
+database, not both. A manual install does not create Flyway history; adopting
+Flyway afterward requires an explicit, verified baseline.
 
-The `Schema Tests` GitHub workflow uses an isolated PostgreSQL 18.6 service to
-test a fresh install. The rollback-only smoke
-test covers status-domain validation, stored summary synchronization, failed
-requests retaining the owner slot, transfer completion, audit timestamps and the
-existing Unicode/integrity checks.
+The Schema Tests workflow uses disposable PostgreSQL 18.6. Its rollback-only
+smoke test checks Unicode, foreign keys, status categories, idempotency, one
+active request, partner/attempt uniqueness, attempt timestamp checks, purge
+cascades and the absence of application triggers. Explicit updates in that test
+demonstrate the schema contract; they do not validate a service implementation.
+Application concurrency and workflow tests must accompany the future service.
 
-## Unicode and First Nations characters
+## Database and service responsibilities
 
-Both database and client encoding are UTF8; the migration refuses a non-UTF8
-database. Names, initials and addresses use `text`, preserving accented letters,
-glottal stops, superscripts, syllabics and combining characters. Do not apply
-ASCII-only validation, uppercase conversion, accent removal or automatic
-transliteration to these values. Initials are not limited to one byte or one
-code point. Opaque subject IDs and idempotency keys use deterministic `C`
-collation for exact comparisons; they are never normalized as human names.
+| Database enforces | API/saga must implement |
+| --- | --- |
+| Primary/foreign keys, NOT NULL and row-level checks | Complete intake and business validation |
+| One non-terminal request per owner | Status transitions, cancellation and immutable submitted data |
+| Unique resident/idempotency key | Compare repeated-key payloads and authorize ownership |
+| Unique request/partner operation | Choose partners and snapshot delivery mode |
+| Matching batch/operation partners | Batch assignment, membership freezing and transfer handling |
+| Unique attempt number; one STARTED attempt per operation | Retry claims, remote idempotency and recovery |
+| Status exists within the correct category | Request summary calculation and inactive-status policy |
+| Audit column defaults on INSERT | Set updated_at / updated_by on every UPDATE |
 
-UTF8 storage does not define language-specific sorting or guarantee a browser
-font can display every character. Confirm fonts and any search/sort requirements
-in the frontend. Encrypt the UTF-8 bytes of payloads; encryption envelopes must
-include the key version, nonce and authentication tag needed for decryption.
-`bytea` is only a ciphertext container: PostgreSQL does not encrypt those fields
-automatically. Keep encryption keys outside the database.
+The database does not reject a known status merely because its transition is
+invalid, synchronize parent summaries, reject sent-batch assignment, or prevent
+reopening terminal work. These are service rules to implement and test before
+production use. Restrict direct writes to the workflow tables accordingly.
 
-Legacy files have their own partner-specified encoding and byte-width rules.
-Validate those separately. Never silently replace unsupported characters with
-`?`, strip combining marks or truncate UTF-8 bytes. Preserve the original input
-and agree an exception/transliteration process with each partner.
+## Intake, ownership and statuses
 
-## Intake and idempotency
+The API inserts request, person, residential address and one PENDING operation
+per selected partner in one transaction. It sets request status explicitly.
+`owner_sub` is taken from a validated access token under the single-configured-
+issuer contract. Check ownership on every status read and retry.
+Never persist access or refresh tokens.
 
-In one short transaction, insert the request, person, submitted address and one
-PENDING operation per selected partner. A deferred trigger rejects incomplete
-intake at commit. `owner_sub` comes from the validated token, under a single
-configured issuer. No access or refresh tokens belong in any table.
+For an existing `(owner_sub, idempotency_key)`, compare validated business data
+with the decrypted original. Matching data returns the existing request;
+different data returns a conflict. Handle a concurrent unique violation by
+rolling back and looking up the existing request. Ciphertext equality is not
+payload equality because encryption may use different nonces.
 
-Check `(owner_sub, idempotency_key)` first. For a repeated key, compare the
-validated incoming business data with the decrypted original; return the
-existing result only if they match, otherwise return a conflict. On simultaneous
-submissions a unique violation is possible: roll back and look up the existing
-request before choosing the appropriate response. Never compare ciphertext for
-payload equality, since encryption can use different nonces.
+The partial unique owner index applies where request status is not COMPLETED
+or CLOSED. FAILED remains active for retry. The service must write the correct
+request status in the same transaction as operation outcomes; otherwise the
+active-owner rule follows an incorrect summary. There is no `closed_at`.
 
-Request status is stored in `address_change_request.status`. Operation changes
-lock their parent request and synchronize that status in the same transaction.
-The summary view reads the stored status and adds operation counts; it is not a
-second source of status truth. Direct updates to an inconsistent summary are rejected.
-There is no `closed_at` in the final schema. A partial unique index on `owner_sub`
-applies where status is not COMPLETED or CLOSED. FAILED stays active for retries.
-All operations SUCCEEDED means COMPLETED; all terminal with at least one CANCELLED
-means CLOSED. Otherwise priority is PROCESSING, PARTIALLY_COMPLETED,
-PENDING_CONFIRMATION (unknown outcome), PENDING_DELIVERY, then FAILED.
-An intake with no operations yet starts SUBMITTED; complete intake is still
-required at commit. New requests can be submitted after completion/closure.
-Terminal requests and terminal operation statuses cannot reopen. Always show
-individual partner results alongside the overall status.
+Recommended summary priority, to implement in service code:
 
-Use short READ COMMITTED transactions, and never hold the parent lock over a
-network call. Do not grant the application DELETE on operations: only the purge
-role should delete request aggregates. Application code must keep person/address
-snapshots and completed attempts immutable. The database does not implement all
-business transition rules or authorization: the API must check owner_sub for
-every status read and retry, and restrict cancellation/partner administration.
+1. No operations yet: SUBMITTED (intake must still be complete before commit).
+2. All operations SUCCEEDED: COMPLETED.
+3. All operations SUCCEEDED/CANCELLED, with a cancellation: CLOSED.
+4. Any IN_PROGRESS: PROCESSING.
+5. Any SUCCEEDED with outstanding work: PARTIALLY_COMPLETED.
+6. Any UNKNOWN: PENDING_CONFIRMATION.
+7. Any PENDING: PENDING_DELIVERY.
+8. Otherwise: FAILED.
 
-## API retry
+The view reads the stored status and adds operation/success counts. It performs
+no writes. Return individual partner outcomes alongside the summary.
 
-### Status vocabulary
+`status_type` uses composite key `(status_category, status_code)`. REQUEST,
+OPERATION, ATTEMPT and BATCH categories are generated constants on referencing
+tables; callers supply only `status`. Add vocabulary through migrations and
+implement its behaviour in code. Keep referenced codes stable; labels can change
+and obsolete codes can be inactive. A new terminal request status also requires
+changing the active-owner index. Delivery mode remains constrained text:
+FLAT_FILE or REALTIME.
 
-`status_type` uses `(status_category, status_code)` as its primary key. Categories
-are REQUEST, OPERATION, ATTEMPT and BATCH. Generated category columns on the consuming
-tables ensure that, for example, a BATCH-only code cannot be used for an attempt.
-Clients write `status`; do not write generated category columns. The frontend
-does not choose request status. Batches have only one status pair, not a separate
-SFTP status.
+## Transactions, retries and batches
 
-Add codes or change display labels through new Flyway migrations. Keep referenced
-codes stable; retire them with `active = false` rather than deleting history.
-The flag is administrative: the API must enforce any policy against new use of
-inactive codes. Foreign keys only enforce that the code exists in its category.
+Use short READ COMMITTED transactions. The service must use one lock order:
+batch rows when involved, then request rows ordered by request_id, then operation
+rows ordered by operation_id, then attempt rows as needed. Real-time work uses
+request then operation. Acquire these locks before mutation; every workflow
+writer must follow the same order. Batch membership discovery must occur while
+holding the batch lock. Never hold these locks across SDX calls, generation
+of files or SFTP transfer. Retry database transactions on deadlock/serialization
+failure according to policy; do not repeat an external side effect blindly.
 
-Adding a lookup row does not implement new workflow behaviour. Review the request
-summary calculation, terminal-state triggers, attempt completion checks, partial indexes
-and API retry/transition logic before introducing a new operational status.
-Adding a new terminal request status also requires changing the active-owner index.
-Delivery mode remains constrained text (FLAT_FILE or REALTIME); the team's lookup
-decision concerns statuses, not delivery-mode configuration.
+Retry claims lock the request and operation, verify eligibility, set the
+operation IN_PROGRESS, insert the next STARTED attempt and update the request
+summary/audits, then commit. Call SDX with the current delegated token in memory.
+Record attempt, operation and request outcomes in a new short transaction.
+A timeout is TIMED_OUT on the attempt and UNKNOWN on the operation. Reconcile
+uncertain outcomes or use partner-supported idempotency before resending.
+Recovery must inspect stale STARTED attempts.
 
-### Audit fields
+ICBC and HEALTH start with FLAT_FILE defaults. Snapshot the selected mode onto
+operations so later configuration changes cannot reroute queued work.
+Batch assignment locks the batch, checks BUILDING, locks affected requests and
+operations, and assigns eligible operations. Freeze membership atomically by
+moving the batch out of BUILDING before generating the file. READY and all later
+states are closed to new membership. Generate from that frozen membership, then
+store filename, checksum, generated_at and detail record_count. Header/trailer
+lines are excluded from record_count.
 
-All eight tables have `created_at`, `created_by`, `updated_at` and `updated_by`.
-A shared `set_updated_at()` trigger runs on every table update, after guard
-triggers. Guards do not assign timestamps.
-For future writes, the API/worker must supply a trusted actor/job ID in the
-by-fields (never accept these fields directly from a browser). Defaults on newly
-by-fields identify only the database role. The timestamp trigger does not
-infer the human actor or replace `updated_by`.
+For upload, claim the frozen generated file as TRANSFERRING and commit before
+network I/O. After confirmed transfer, a service transaction locks the batch,
+its requests and operations in the agreed order; writes SENT, transferred_at,
+operation SUCCEEDED and recalculated request summaries; and updates audit fields.
+SENT is terminal transport success. No acknowledgement or proof of partner
+application is required. User wording should say "Sent to partner". FAILED or
+UNKNOWN transfer outcomes must not accept new members; reconcile uncertain
+delivery before retry. Retry the same immutable file under the partner's
+duplicate-handling contract.
 
-### Retry processing
+There is one batch_id per operation. Replacing it loses prior membership;
+add a linking history before implementing reassignment/regeneration. Attempt
+rows track API calls, not file-transfer attempts. Store full files separately
+in protected storage.
 
-Claim an eligible operation atomically (`UPDATE ... SET status = 'IN_PROGRESS' WHERE status = 'FAILED'
-RETURNING operation_id`); proceed only if one row is returned. In the same
-transaction, insert a STARTED attempt with the next attempt number and encrypted
-outbound payload. Commit, call SDX using the current request's token in memory,
-then update attempt and operation outcomes in a new short transaction. A unique
-index permits only one STARTED attempt per operation.
+## Audits, personal information and Unicode
 
-Retry eligibility depends on the error, not just FAILED. A timeout is TIMED_OUT
-on the attempt and UNKNOWN on the operation. Reconcile or use a partner-supported
-idempotent retry; a local uniqueness constraint cannot prevent a remote duplicate.
-Use a stable operation_id as the external idempotency key if the partner contract
-supports it. Recovery must inspect old STARTED attempts; the DDL is not a recovery
-scheduler. Never reset stale work and resend blindly.
+All tables have created_at/by and updated_at/by. Timestamp defaults apply on
+INSERT only. The API/job must explicitly set updated_at and trusted updated_by
+on every UPDATE. Database-role defaults on by-fields identify that role, not
+the resident. Do not accept audit actors directly from the browser.
 
-## Temporary flat-file delivery
+Names and residential addresses use UTF8 text, preserving First Nations letters,
+syllabics and combining characters. Do not apply ASCII-only validation, byte
+truncation or silent transliteration. Opaque subjects/idempotency keys use C
+collation for exact comparison. Confirm frontend fonts and partner-specific
+legacy file encodings separately; agree how unsupported file characters are
+handled without changing the original input.
 
-ICBC and HEALTH start with FLAT_FILE defaults. Copy the selected mode into each
-operation at intake. Later changes to partner defaults do not reroute queued work.
-Each batch belongs to one partner; a composite FK prevents assigning another
-partner's operation to it. Assign and freeze membership before generating the
-file, and exclude already-assigned work from subsequent nightly selection.
+Payload/identifier bytea columns hold application-provided ciphertext envelopes
+with key version, nonce and authentication tag. They do not encrypt themselves.
+Keep keys outside the database; never include tokens or headers in payload
+snapshots. Other person/address columns remain personal information requiring
+restricted access and platform encryption. Only old/new residential addresses
+are stored; billing fields and the same-address indicator are excluded.
 
-The agreed MVP keeps one `batch_id` on each operation. It does not preserve past
-membership if you overwrite that field. Add a batch-operation history table
-before implementing regeneration/reassignment. Retry transfer of the same
-immutable file using its existing batch record, filename and checksum, in line
-with the partner's duplicate-handling contract. API attempt rows are not a file
-transfer-attempt history.
+## Retention and provisioning
 
-Successful file transfer is the completion boundary: the worker sets batch SENT,
-and a database trigger marks its non-cancelled outstanding operations SUCCEEDED
-and updates their request summaries in the same transaction. No partner
-acknowledgement or proof that records were applied is required. The UI should say
-"Sent to partner", not "Partner records updated". Batch states are BUILDING,
-READY, TRANSFERRING, SENT, FAILED and UNKNOWN. SENT is terminal success; the worker
-must not reset or regenerate a sent batch. Freeze membership before transfer:
-do not attach new operations after marking SENT. Unknown transfer outcomes require
-reconciliation before retry. `record_count` counts detail records, excluding
-headers/trailers. Full files belong in protected storage, with metadata here.
-
-The saga's batch-assignment transaction must lock the selected batch first, verify
-that its status is BUILDING or READY, then assign the operation. The operation
-guard locks the operation row and then its request row; therefore the effective
-order is batch, operation, request. The status check is also enforced by
-`guard_operation()` as a safety net. The saga must not assign membership directly
-without first locking the batch.
-Batch completion holds the batch lock, then locks related operations in
-`operation_id` order, then related requests in `request_id` order before marking
-operations SUCCEEDED. This uses the same operation-to-request order as normal
-operation updates and avoids the previous request/operation inversion. Keep
-these transactions short and do not hold them during file generation or transfer.
-
-### Diagram alignment / review decisions
-
-- Status lookup tables replace status enums/check lists, as agreed with the team.
-- Stored request status and a status-based owner index replace the earlier derived-only
-  status and `closed_at` design.
-- All diagram audit fields are present; generic update timestamps address review feedback.
-- One batch status replaces SFTP/acknowledgement tracking; SENT completes delivery.
-- Submitted addresses contain old and new residential addresses only; billing
-  address fields and the same-as-billing indicator are excluded.
-- Existing `height_cm` / `weight_kg` names keep units explicit. Error codes are text;
-  the diagram's Invalid PHN / Address Rejected are examples, not a complete list.
-- Checksum, generated/transferred timestamps and existing integrity rules remain
-  useful implementation details beyond the conceptual diagram. The single batch
-  membership, partner-matching FK and one-started-attempt rule remain unchanged.
-- All agreed changes are created directly by the single initial V1 migration;
-  no intermediate schema, upgrade fixture or data-conversion migration is needed.
-
-## Retention and permissions
-
-The daily purge uses original request `created_at`, including incomplete requests
-under the agreed strict 30-day rule. This cascades to person, address, operation
-and attempt data. Example for the purge job (destructive; preview count first):
+The daily purge uses original request created_at under the strict 30-day rule,
+including incomplete work. Preview the count before deleting:
 
 ```sql
 SELECT count(*) FROM address_change.address_change_request
@@ -220,19 +175,17 @@ DELETE FROM address_change.address_change_request
 WHERE created_at < now() - interval '30 days';
 ```
 
-Deleting the request removes idempotency and ownership history too; deduplication
-is limited to the retained window. The job must separately delete generated file
-objects and later remove unreferenced batch metadata according to policy. A batch
-can reference multiple requests of different ages, so do not delete a shared file
-just because one request expires. Define file retention and backup retention with
-the platform team. There is no automatic purge scheduler in this migration.
+Request deletion cascades to person, address, operation and attempt rows.
+Idempotency history is limited to retained data. Separately remove generated
+file objects and unreferenced batch metadata under the retention policy;
+a file may contain requests of different ages. Define backup retention with
+the platform team. This migration installs no purge scheduler.
 
-Have the platform provision a migration owner, a restricted API role and a purge
-role. Only grant the API access needed for the workflow; never grant public read
-access. Encrypted fields do not protect the other person/address columns: those
-remain personal information requiring restricted access and platform encryption.
+Database creation, Patroni, backups, TLS, roles and grants remain provisioning
+concerns. Use a migration owner, restricted service role and separate purge role.
+No public read access; the service should not delete request aggregates.
 
-Prisma models are not generated by this SQL. After application, introspect with
-the repository's Prisma configuration and review the mappings; Flyway remains
-the migration authority. Partial indexes, triggers and the derived view are SQL
-features and must not be replaced through `prisma db push`.
+Prisma models/service methods are not generated by this migration. Introspect
+and review mappings after application; Flyway remains the migration authority.
+Preserve the SQL partial indexes, constraints and view rather than replacing
+the schema through `prisma db push`.

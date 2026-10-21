@@ -1,4 +1,5 @@
 -- Run after V1 with psql -X -v ON_ERROR_STOP=1 -f this-file.sql.
+-- Structural schema checks only. Workflow/concurrency tests belong to the service.
 -- All test data is rolled back, including on failure when psql exits.
 BEGIN;
 DO $$
@@ -9,14 +10,15 @@ DECLARE
   health uuid;
   op uuid;
   batch uuid;
-  sent_batch uuid;
   test_owner text := 'test-' || gen_random_uuid()::text;
   unicode_name text := 'Sḵwx̱wú7mesh ʔə ᐊᓂᔑᓈᐯ';
   actual text;
 BEGIN
-  IF (SELECT count(*) FROM information_schema.triggers
-    WHERE trigger_schema = 'address_change' AND trigger_name = 'z_set_updated_at') <> 8 THEN
-    RAISE EXCEPTION 'Missing shared audit trigger';
+  IF EXISTS (SELECT 1 FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'address_change' AND NOT t.tgisinternal) THEN
+    RAISE EXCEPTION 'Application triggers must not be installed';
   END IF;
   SELECT partner_id INTO STRICT icbc FROM address_change.partner_system WHERE partner_code = 'ICBC';
   SELECT partner_id INTO STRICT health FROM address_change.partner_system WHERE partner_code = 'HEALTH';
@@ -58,11 +60,10 @@ BEGIN
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
   BEGIN
-    UPDATE address_change.flat_file_batch SET status = 'NOT_A_STATUS' WHERE batch_id = batch;
-    RAISE EXCEPTION 'Allowed an undefined batch status';
+    UPDATE address_change.address_change_request SET status = 'NOT_A_STATUS' WHERE request_id = r;
+    RAISE EXCEPTION 'Allowed an undefined request status';
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
-  -- Vocabulary can evolve without altering the consuming table.
   INSERT INTO address_change.status_type(status_category, status_code, display_name)
     VALUES ('BATCH', 'SMOKE_TEST_ONLY', 'Test status');
   UPDATE address_change.flat_file_batch SET status = 'SMOKE_TEST_ONLY' WHERE batch_id = batch;
@@ -73,15 +74,6 @@ BEGIN
   EXCEPTION WHEN foreign_key_violation THEN NULL;
   END;
   UPDATE address_change.flat_file_batch SET status = 'BUILDING' WHERE batch_id = batch;
-  IF NOT EXISTS (SELECT 1 FROM address_change.flat_file_batch
-    WHERE batch_id = batch AND updated_at > created_at) THEN
-    RAISE EXCEPTION 'Shared updated_at trigger did not run';
-  END IF;
-  BEGIN
-    UPDATE address_change.address_change_request SET status = 'COMPLETED' WHERE request_id = r;
-    RAISE EXCEPTION USING ERRCODE = 'ZX001', MESSAGE = 'Allowed premature request completion';
-  EXCEPTION WHEN raise_exception THEN NULL;
-  END;
   BEGIN
     UPDATE address_change.processing_operation SET batch_id = batch WHERE operation_id = op;
     RAISE EXCEPTION 'Allowed cross-partner batch membership';
@@ -95,15 +87,37 @@ BEGIN
     RAISE EXCEPTION 'Allowed concurrent started attempts';
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
-  UPDATE address_change.processing_attempt SET status = 'FAILED', completed_at = clock_timestamp()
-    WHERE operation_id = op;
+  BEGIN
+    UPDATE address_change.processing_attempt SET status = 'SUCCEEDED'
+      WHERE operation_id = op AND attempt_number = 1;
+    RAISE EXCEPTION 'Allowed completed attempt without completed_at';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  UPDATE address_change.processing_attempt
+    SET status = 'FAILED', completed_at = clock_timestamp(), updated_at = clock_timestamp(), updated_by = 'test'
+    WHERE operation_id = op AND attempt_number = 1;
+  BEGIN
+    INSERT INTO address_change.processing_attempt
+      (operation_id, attempt_number, status, completed_at, request_payload_encrypted)
+      VALUES (op, 1, 'FAILED', clock_timestamp(), decode('01', 'hex'));
+    RAISE EXCEPTION 'Allowed duplicate attempt number';
+  EXCEPTION WHEN unique_violation THEN NULL;
+  END;
   INSERT INTO address_change.processing_attempt(operation_id, attempt_number, request_payload_encrypted)
     VALUES (op, 2, decode('02', 'hex'));
-  UPDATE address_change.processing_attempt SET status = 'SUCCEEDED', completed_at = clock_timestamp()
+  UPDATE address_change.processing_attempt
+    SET status = 'SUCCEEDED', completed_at = clock_timestamp(), updated_at = clock_timestamp(), updated_by = 'test'
     WHERE operation_id = op AND attempt_number = 2;
-  UPDATE address_change.processing_operation SET status = 'FAILED' WHERE request_id = r;
+
+  -- Simulate explicit caller writes; no automatic request aggregation is installed.
+  UPDATE address_change.processing_operation
+    SET status = 'FAILED', updated_at = clock_timestamp(), updated_by = 'test'
+    WHERE request_id = r;
   SELECT status INTO actual FROM address_change.address_change_request WHERE request_id = r;
-  IF actual <> 'FAILED' THEN RAISE EXCEPTION 'Failed request status not stored'; END IF;
+  IF actual <> 'SUBMITTED' THEN RAISE EXCEPTION 'Unexpected automatic request-status update'; END IF;
+  UPDATE address_change.address_change_request
+    SET status = 'FAILED', updated_at = clock_timestamp(), updated_by = 'test'
+    WHERE request_id = r;
   BEGIN
     INSERT INTO address_change.address_change_request
       (owner_sub, idempotency_key, raw_payload_encrypted, effective_date, created_by, updated_by)
@@ -111,45 +125,46 @@ BEGIN
     RAISE EXCEPTION 'Failed request incorrectly released owner slot';
   EXCEPTION WHEN unique_violation THEN NULL;
   END;
-  UPDATE address_change.processing_operation SET status = 'SUCCEEDED' WHERE operation_id = op;
-  SELECT status INTO actual FROM address_change.request_status WHERE request_id = r;
-  IF actual <> 'PARTIALLY_COMPLETED' THEN RAISE EXCEPTION 'Incorrect partial status: %', actual; END IF;
-  UPDATE address_change.processing_operation SET batch_id = batch
+  UPDATE address_change.processing_operation
+    SET batch_id = batch, updated_at = clock_timestamp(), updated_by = 'test'
     WHERE request_id = r AND partner_id = health;
-  UPDATE address_change.flat_file_batch SET status = 'SENT', record_count = 1
+  UPDATE address_change.flat_file_batch
+    SET status = 'SENT', record_count = 1, transferred_at = clock_timestamp(),
+        updated_at = clock_timestamp(), updated_by = 'test'
     WHERE batch_id = batch;
+  IF EXISTS (SELECT 1 FROM address_change.processing_operation
+    WHERE request_id = r AND partner_id = health AND status <> 'FAILED') THEN
+    RAISE EXCEPTION 'Unexpected automatic batch completion';
+  END IF;
+  UPDATE address_change.processing_operation
+    SET status = 'SUCCEEDED', updated_at = clock_timestamp(), updated_by = 'test'
+    WHERE request_id = r;
+  UPDATE address_change.address_change_request
+    SET status = 'COMPLETED', updated_at = clock_timestamp(), updated_by = 'test'
+    WHERE request_id = r;
   SELECT status INTO actual FROM address_change.request_status WHERE request_id = r;
-  IF actual <> 'COMPLETED' THEN RAISE EXCEPTION 'Incorrect completed status'; END IF;
-  IF NOT EXISTS (SELECT 1 FROM address_change.address_change_request
-    WHERE request_id = r AND status = 'COMPLETED')
-    THEN RAISE EXCEPTION 'Completed request status not stored'; END IF;
-  IF NOT EXISTS (SELECT 1 FROM address_change.processing_operation
-    WHERE request_id = r AND partner_id = health AND status = 'SUCCEEDED')
-    THEN RAISE EXCEPTION 'Successful transfer did not complete partner operation'; END IF;
-  INSERT INTO address_change.flat_file_batch(partner_id, file_date, status)
-    VALUES (health, current_date, 'SENT') RETURNING batch_id INTO sent_batch;
+  IF actual <> 'COMPLETED' THEN RAISE EXCEPTION 'View did not expose stored request status'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM address_change.request_status
+    WHERE request_id = r AND operation_count = 2 AND succeeded_count = 2) THEN
+    RAISE EXCEPTION 'Incorrect operation counts';
+  END IF;
   BEGIN
     INSERT INTO address_change.address_change_request
-      (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date, created_by, updated_by)
-      VALUES (other_request, 'second-' || gen_random_uuid()::text, 'sent-batch-test',
-        decode('01', 'hex'), current_date, 'test', 'test');
-    INSERT INTO address_change.processing_operation(request_id, partner_id, delivery_mode, batch_id)
-      VALUES (other_request, health, 'FLAT_FILE', sent_batch);
-    RAISE EXCEPTION 'Allowed assignment to a sent batch';
-  EXCEPTION WHEN raise_exception THEN NULL;
+      (owner_sub, idempotency_key, raw_payload_encrypted, effective_date, created_by, updated_by)
+      VALUES (test_owner, 'submission-1', decode('01', 'hex'), current_date, 'test', 'test');
+    RAISE EXCEPTION 'Allowed duplicate idempotency key on completed request';
+  EXCEPTION WHEN unique_violation THEN NULL;
   END;
-  DELETE FROM address_change.address_change_request WHERE request_id = other_request;
-  BEGIN
-    UPDATE address_change.processing_operation SET status = 'PENDING' WHERE operation_id = op;
-    RAISE EXCEPTION USING ERRCODE = 'ZX001', MESSAGE = 'Allowed reopening closed operation';
-  EXCEPTION WHEN raise_exception THEN NULL;
-  END;
-  -- Demonstrate owner slot is released after completion; this new row is removed below.
   INSERT INTO address_change.address_change_request
     (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date, created_by, updated_by)
     VALUES (other_request, test_owner, 'submission-2', decode('01', 'hex'), current_date, 'test', 'test');
-  DELETE FROM address_change.address_change_request WHERE request_id = other_request;
-  RAISE NOTICE 'Core constraints and Unicode checks passed';
+  DELETE FROM address_change.address_change_request WHERE request_id = r;
+  IF EXISTS (SELECT 1 FROM address_change.request_person WHERE request_id = r)
+    OR EXISTS (SELECT 1 FROM address_change.submitted_address WHERE request_id = r)
+    OR EXISTS (SELECT 1 FROM address_change.processing_operation WHERE request_id = r)
+    OR EXISTS (SELECT 1 FROM address_change.processing_attempt WHERE operation_id = op) THEN
+    RAISE EXCEPTION 'Request purge did not cascade';
+  END IF;
+  RAISE NOTICE 'Schema constraints, explicit updates and Unicode checks passed';
 END $$;
-SET CONSTRAINTS ALL IMMEDIATE;
 ROLLBACK;
