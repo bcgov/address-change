@@ -8,10 +8,11 @@ import { AppController } from './app.controller'
 import { MetricsController } from './metrics.controller'
 import { TerminusModule } from '@nestjs/terminus'
 import { HealthController } from './health.controller'
+import { AddressChangeController } from './address-change/address-change.controller'
 
 @Module({
   imports: [ConfigModule.forRoot({ ignoreEnvFile: true }), TerminusModule],
-  controllers: [AppController, MetricsController, HealthController],
+  controllers: [AppController, MetricsController, HealthController, AddressChangeController],
   providers: [AppService, PrismaService],
 })
 export class AppModule {

@@ -10,33 +10,85 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as AuthenticatedAddressChangeIndexRouteImport } from './routes/_authenticated/address-change/index'
+import { Route as AuthenticatedAddressChangeNewRouteImport } from './routes/_authenticated/address-change/new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAddressChangeIndexRoute = AuthenticatedAddressChangeIndexRouteImport.update({
+  id: '/address-change/',
+  path: '/address-change/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAddressChangeNewRoute = AuthenticatedAddressChangeNewRouteImport.update({
+  id: '/address-change/new',
+  path: '/address-change/new',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/address-change/new': typeof AuthenticatedAddressChangeNewRoute
+  '/address-change/': typeof AuthenticatedAddressChangeIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/address-change/new': typeof AuthenticatedAddressChangeNewRoute
+  '/address-change': typeof AuthenticatedAddressChangeIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/login': typeof LoginRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/_authenticated/address-change/new': typeof AuthenticatedAddressChangeNewRoute
+  '/_authenticated/address-change/': typeof AuthenticatedAddressChangeIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/login' | '/auth/callback' | '/address-change/new' | '/address-change/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/login' | '/auth/callback' | '/address-change/new' | '/address-change'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/login'
+    | '/auth/callback'
+    | '/_authenticated/address-change/new'
+    | '/_authenticated/address-change/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +100,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/address-change/': {
+      id: '/_authenticated/address-change/'
+      path: '/address-change'
+      fullPath: '/address-change/'
+      preLoaderRoute: typeof AuthenticatedAddressChangeIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/address-change/new': {
+      id: '/_authenticated/address-change/new'
+      path: '/address-change/new'
+      fullPath: '/address-change/new'
+      preLoaderRoute: typeof AuthenticatedAddressChangeNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
+interface AuthenticatedRouteChildren {
+  AuthenticatedAddressChangeNewRoute: typeof AuthenticatedAddressChangeNewRoute
+  AuthenticatedAddressChangeIndexRoute: typeof AuthenticatedAddressChangeIndexRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAddressChangeNewRoute: AuthenticatedAddressChangeNewRoute,
+  AuthenticatedAddressChangeIndexRoute: AuthenticatedAddressChangeIndexRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  LoginRoute: LoginRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
