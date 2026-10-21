@@ -7,18 +7,13 @@
       "request": "launch",
       "runtimeExecutable": "npm",
       "runtimeVersion": "22",
-      "runtimeArgs": [
-        "run",
-        "start:dev"
-      ],
+      "runtimeArgs": ["run", "start:dev"],
       "cwd": "${workspaceFolder}/backend",
       "console": "integratedTerminal",
       "autoAttachChildProcesses": true,
       "restart": true,
       "sourceMaps": true,
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
+      "skipFiles": ["<node_internals>/**"],
       "env": {
         "PORT": "3001",
         "POSTGRES_HOST": "127.0.0.1",
@@ -35,15 +30,10 @@
       "request": "launch",
       "runtimeExecutable": "npm",
       "runtimeVersion": "22",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["run", "dev"],
       "cwd": "${workspaceFolder}/frontend",
       "console": "integratedTerminal",
-      "env": {
-        "PORT": "3000"
-      },
+      "env": { "PORT": "3000" },
       "serverReadyAction": {
         "pattern": "Local:\\s+(https?://\\S+)",
         "uriFormat": "%s",
@@ -54,10 +44,7 @@
   "compounds": [
     {
       "name": "Debug full stack",
-      "configurations": [
-        "Debug backend",
-        "Debug frontend"
-      ],
+      "configurations": ["Debug backend", "Debug frontend"],
       "preLaunchTask": "Prepare local database",
       "stopAll": true
     }

@@ -19,6 +19,7 @@ jobs:
       packages: write
     secrets:
       oc_namespace: ${{ vars.OC_NAMESPACE }}
+      oc_server: ${{ vars.OC_SERVER }}
       oc_token: ${{ secrets.oc_token }}
     with:
       cleanup: label
