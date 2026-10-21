@@ -175,11 +175,12 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
-# VSCode/Cursor workspace settings and shared launch configuration
+# VSCode/Cursor workspace settings and shared debugging configuration
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
 !.vscode/launch.json
+!.vscode/tasks.json
 
 # yarn v2
 .yarn/cache
