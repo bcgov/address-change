@@ -9,6 +9,7 @@ DECLARE
   health uuid;
   op uuid;
   batch uuid;
+  sent_batch uuid;
   test_owner text := 'test-' || gen_random_uuid()::text;
   unicode_name text := 'Sḵwx̱wú7mesh ʔə ᐊᓂᔑᓈᐯ';
   actual text;
@@ -125,6 +126,19 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM address_change.processing_operation
     WHERE request_id = r AND partner_id = health AND status = 'SUCCEEDED')
     THEN RAISE EXCEPTION 'Successful transfer did not complete partner operation'; END IF;
+  INSERT INTO address_change.flat_file_batch(partner_id, file_date, status)
+    VALUES (health, current_date, 'SENT') RETURNING batch_id INTO sent_batch;
+  BEGIN
+    INSERT INTO address_change.address_change_request
+      (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date, created_by, updated_by)
+      VALUES (other_request, 'second-' || gen_random_uuid()::text, 'sent-batch-test',
+        decode('01', 'hex'), current_date, 'test', 'test');
+    INSERT INTO address_change.processing_operation(request_id, partner_id, delivery_mode, batch_id)
+      VALUES (other_request, health, 'FLAT_FILE', sent_batch);
+    RAISE EXCEPTION 'Allowed assignment to a sent batch';
+  EXCEPTION WHEN raise_exception THEN NULL;
+  END;
+  DELETE FROM address_change.address_change_request WHERE request_id = other_request;
   BEGIN
     UPDATE address_change.processing_operation SET status = 'PENDING' WHERE operation_id = op;
     RAISE EXCEPTION USING ERRCODE = 'ZX001', MESSAGE = 'Allowed reopening closed operation';

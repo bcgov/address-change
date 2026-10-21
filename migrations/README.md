@@ -177,6 +177,18 @@ do not attach new operations after marking SENT. Unknown transfer outcomes requi
 reconciliation before retry. `record_count` counts detail records, excluding
 headers/trailers. Full files belong in protected storage, with metadata here.
 
+The saga's batch-assignment transaction must lock the selected batch first, verify
+that its status is BUILDING or READY, then assign the operation. The operation
+guard locks the operation row and then its request row; therefore the effective
+order is batch, operation, request. The status check is also enforced by
+`guard_operation()` as a safety net. The saga must not assign membership directly
+without first locking the batch.
+Batch completion holds the batch lock, then locks related operations in
+`operation_id` order, then related requests in `request_id` order before marking
+operations SUCCEEDED. This uses the same operation-to-request order as normal
+operation updates and avoids the previous request/operation inversion. Keep
+these transactions short and do not hold them during file generation or transfer.
+
 ### Diagram alignment / review decisions
 
 - Status lookup tables replace status enums/check lists, as agreed with the team.

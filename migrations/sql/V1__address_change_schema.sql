@@ -208,6 +208,7 @@ END $$;
 
 CREATE FUNCTION address_change.guard_operation() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE parent_status text;
+DECLARE batch_status text;
 BEGIN
   SELECT status INTO parent_status FROM address_change.address_change_request
     WHERE request_id = NEW.request_id FOR UPDATE;
@@ -223,6 +224,13 @@ BEGIN
     END IF;
     IF OLD.status IN ('SUCCEEDED', 'CANCELLED') AND NEW IS DISTINCT FROM OLD THEN
       RAISE EXCEPTION 'Terminal operation is immutable';
+    END IF;
+  END IF;
+  IF NEW.batch_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.batch_id IS DISTINCT FROM OLD.batch_id) THEN
+    SELECT status INTO batch_status FROM address_change.flat_file_batch
+      WHERE batch_id = NEW.batch_id;
+    IF batch_status IS NULL OR batch_status NOT IN ('BUILDING', 'READY') THEN
+      RAISE EXCEPTION 'Operation cannot be assigned to a batch that is not open: %', batch_status;
     END IF;
   END IF;
   RETURN NEW;
@@ -269,6 +277,12 @@ CREATE TRIGGER operation_status_sync AFTER INSERT OR UPDATE OF status
 CREATE FUNCTION address_change.complete_sent_batch() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.status = 'SENT' AND OLD.status IS DISTINCT FROM NEW.status THEN
+    -- Lock order is batch (already held by this UPDATE), operations, requests.
+    -- guard_operation() uses the operation-to-request order, so locking all
+    -- operations first prevents the previous request/operation inversion.
+    PERFORM o.operation_id FROM address_change.processing_operation o
+      WHERE o.batch_id = NEW.batch_id
+      ORDER BY o.operation_id FOR UPDATE;
     PERFORM r.request_id FROM address_change.address_change_request r
       WHERE EXISTS (SELECT 1 FROM address_change.processing_operation o
         WHERE o.request_id = r.request_id AND o.batch_id = NEW.batch_id)
