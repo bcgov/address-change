@@ -21,7 +21,7 @@ export default defineConfig({
     proxy: {
       // Proxy API requests to the backend
       '/api': {
-        target: 'http://localhost:3001',
+        target: process.env.BACKEND_URL ?? 'http://localhost:3001',
         changeOrigin: true,
       },
     },
@@ -47,7 +47,7 @@ export default defineConfig({
       scss: {
         // Silence deprecation warnings caused by Bootstrap SCSS
         // which is out of our control.
-        silenceDeprecations: ['color-functions', 'global-builtin', 'import'],
+        silenceDeprecations: ['color-functions', 'global-builtin', 'import', 'if-function'],
       },
     },
   },

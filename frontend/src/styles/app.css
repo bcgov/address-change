@@ -1,0 +1,239 @@
+/* App layout and form styles built on @bcgov/design-tokens (modelled on gov.bc.ca spacing). */
+body {
+  margin: 0;
+  background: var(--surface-color-background-light-gray);
+  color: var(--typography-color-primary, #2d2d2d);
+  font: var(--typography-regular-body);
+}
+
+.app-main {
+  flex: 1 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: var(--layout-padding-xlarge) var(--layout-padding-medium) var(--layout-margin-huge);
+}
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--layout-margin-medium);
+  color: var(--surface-color-background-white);
+}
+
+.page-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--layout-margin-medium);
+  margin-bottom: var(--layout-margin-xlarge);
+  padding-bottom: var(--layout-padding-medium);
+  border-bottom: 2px solid var(--theme-gold-100, #fcba19);
+}
+
+.page-heading h2 {
+  margin: 0;
+  color: var(--theme-primary-blue);
+  font-size: var(--typography-font-size-h2);
+}
+
+.page-heading p {
+  margin: var(--layout-margin-xsmall) 0 0;
+}
+
+.app-card {
+  box-sizing: border-box;
+  margin: 0 0 var(--layout-margin-large);
+  padding: var(--layout-padding-large) var(--layout-padding-xlarge);
+  border: 1px solid var(--surface-color-border-default);
+  border-radius: 4px;
+  background: var(--surface-color-background-white);
+}
+
+.app-card > h3,
+.app-card > legend {
+  margin: 0 0 var(--layout-margin-medium);
+  padding: 0;
+  color: var(--theme-primary-blue);
+  font-size: var(--typography-font-size-h4);
+  font-weight: var(--typography-font-weights-bold);
+}
+
+fieldset.app-card {
+  min-width: 0;
+}
+
+.app-card-description {
+  margin: 0 0 var(--layout-margin-medium);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--layout-margin-medium) var(--layout-margin-large);
+}
+
+.field-grid .span-full {
+  grid-column: 1 / -1;
+}
+
+.details-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--layout-margin-small) var(--layout-margin-large);
+  margin: 0 0 var(--layout-margin-large);
+  padding: var(--layout-padding-medium);
+  border-left: 4px solid var(--theme-primary-blue);
+  background: var(--surface-color-background-light-gray);
+}
+
+.details-list dt {
+  font-weight: var(--typography-font-weights-bold);
+}
+
+.details-list dd {
+  margin: 0;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--layout-margin-small);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--layout-margin-medium);
+  margin-top: var(--layout-margin-large);
+}
+
+.form-alert {
+  margin-top: var(--layout-margin-large);
+}
+
+.centered-card {
+  max-width: 32rem;
+  margin: var(--layout-margin-xxlarge) auto 0;
+  text-align: center;
+}
+
+.centered-card h2 {
+  margin-top: 0;
+  color: var(--theme-primary-blue);
+}
+
+.login-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--layout-margin-xlarge);
+  box-sizing: border-box;
+  max-width: 52rem;
+  margin: var(--layout-margin-xxlarge) auto 0;
+  padding: var(--layout-padding-xlarge);
+  border: 1px solid var(--surface-color-border-default);
+  border-top: 4px solid var(--theme-gold-100, #fcba19);
+  border-radius: 4px;
+  background: var(--surface-color-background-white);
+}
+
+.login-panel-note {
+  margin: var(--layout-margin-medium) 0 0;
+  font-size: var(--typography-font-size-small-body);
+}
+
+.login-panel-content h2 {
+  margin-top: 0;
+  color: var(--theme-primary-blue);
+}
+
+.login-panel-art {
+  flex: 0 1 16rem;
+  max-width: 40%;
+  height: auto;
+}
+
+@media (max-width: 40rem) {
+  .login-panel {
+    flex-direction: column-reverse;
+    text-align: center;
+  }
+
+  .login-panel-art {
+    max-width: 60%;
+  }
+
+  .app-card {
+    padding: var(--layout-padding-medium);
+  }
+
+  .details-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.address-search {
+  margin-bottom: var(--layout-margin-large);
+}
+
+.address-search-status {
+  min-height: 1.5rem;
+  margin-top: var(--layout-margin-xsmall);
+  font: var(--typography-regular-small-body);
+}
+
+.address-search-results {
+  margin: var(--layout-margin-xsmall) 0 0;
+  padding: 0;
+  border: 1px solid var(--surface-color-border-default);
+  border-radius: 4px;
+  background: var(--surface-color-background-white);
+  list-style: none;
+}
+
+.address-search-results li + li {
+  border-top: 1px solid var(--surface-color-border-default);
+}
+
+.address-search-results button {
+  width: 100%;
+  padding: var(--layout-padding-small) var(--layout-padding-medium);
+  border: 0;
+  background: none;
+  font: var(--typography-regular-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.address-search-results button:hover,
+.address-search-results button:focus-visible {
+  background: var(--surface-color-background-light-gray);
+}
+
+/* Show a red asterisk alongside the design system's "(required)" text. */
+.bcds-react-aria-TextField--Label .required::after,
+.bcds-react-aria-Checkbox .required::after,
+.bcds-react-aria-Select[data-required] .bcds-react-aria-Select--Label::after {
+  margin-left: 0.25rem;
+  color: var(--support-border-color-danger, #ce3e39);
+  content: '*';
+}
+
+/* Vertically centre the design system alert banner icons with its text. */
+.bcds-Alert-Banner--Container {
+  align-items: center;
+}
+
+.bcds-Alert-Banner--Icon,
+.bcds-Alert-Banner--closeIcon {
+  display: flex;
+  align-items: center;
+}
+
+.bcds-Alert-Banner--Icon svg,
+.bcds-Alert-Banner--closeIcon svg {
+  display: block;
+}
