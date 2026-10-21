@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start local database",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "up",
+        "--detach",
+        "database"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run database migrations",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "run",
+        "--rm",
+        "migrations"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": [
+        "Start local database"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Prepare local database",
+      "dependsOn": [
+        "Run database migrations"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}
