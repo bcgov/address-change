@@ -1,0 +1,43 @@
+name: Schema Tests
+
+on:
+  pull_request:
+    paths:
+      - "migrations/**"
+      - ".github/workflows/schema-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: schema_test
+          POSTGRES_PASSWORD: disposable-test-password
+          POSTGRES_DB: schema_fresh
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U schema_test -d schema_fresh"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: schema_test
+      PGPASSWORD: disposable-test-password
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fresh install and smoke tests
+        run: |
+          for migration in migrations/sql/V*.sql; do
+            docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_fresh -v ON_ERROR_STOP=1 --single-transaction < "$migration"
+          done
+          docker exec -i "${{ job.services.postgres.id }}" psql -X -U schema_test -d schema_fresh -v ON_ERROR_STOP=1 < migrations/tests/schema_smoke.sql
