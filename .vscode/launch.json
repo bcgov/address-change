@@ -1,0 +1,47 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Backend",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:debug"],
+      "cwd": "${workspaceFolder}/backend",
+      "console": "integratedTerminal",
+      "autoAttachChildProcesses": true,
+      "restart": true,
+      "sourceMaps": true,
+      "outFiles": ["${workspaceFolder}/backend/dist/**/*.js"],
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Frontend (Vite)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "${workspaceFolder}/frontend",
+      "env": {
+        "PORT": "5173",
+        "BACKEND_URL": "http://localhost:3000"
+      },
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "Chrome (Frontend)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend/src"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack",
+      "configurations": ["Debug Backend", "Frontend (Vite)", "Chrome (Frontend)"],
+      "stopAll": true
+    }
+  ]
+}
