@@ -12,4 +12,155 @@ datasource db {
   schemas  = ["address_change"]
 }
 
-// Add application models here when the database model is ready.
+// Generated status_category columns are omitted: Prisma cannot write them and the database fills them.
+
+model PartnerSystem {
+  partnerId             String   @id @default(dbgenerated("gen_random_uuid()")) @map("partner_id") @db.Uuid
+  partnerCode           String   @unique @map("partner_code")
+  partnerName           String   @map("partner_name")
+  active                Boolean  @default(true)
+  deliveryMode          String   @map("delivery_mode")
+  sftpHost              String?  @map("sftp_host")
+  sftpPort              Int      @default(22) @map("sftp_port")
+  sftpUsername          String?  @map("sftp_username")
+  sftpAuthMethod        String?  @map("sftp_auth_method")
+  sftpEncryptedPassword Bytes?   @map("sftp_encrypted_password")
+  sftpKeyPath           String?  @map("sftp_key_path")
+  sftpRemoteDirectory   String?  @map("sftp_remote_directory")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy             String   @default(dbgenerated("CURRENT_USER")) @map("created_by")
+  updatedAt             DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy             String   @default(dbgenerated("CURRENT_USER")) @map("updated_by")
+
+  batches    FlatFileBatch[]
+  operations ProcessingOperation[]
+
+  @@map("partner_system")
+  @@schema("address_change")
+}
+
+model AddressChangeRequest {
+  requestId           String   @id @default(dbgenerated("gen_random_uuid()")) @map("request_id") @db.Uuid
+  ownerSub            String   @map("owner_sub")
+  idempotencyKey      String   @map("idempotency_key")
+  receivedAt          DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  rawPayloadEncrypted Bytes    @map("raw_payload_encrypted")
+  effectiveDate       DateTime @map("effective_date") @db.Date
+  status              String   @default("SUBMITTED")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy           String   @map("created_by")
+  updatedAt           DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy           String   @map("updated_by")
+
+  person     RequestPerson?
+  address    SubmittedAddress?
+  operations ProcessingOperation[]
+
+  @@unique([ownerSub, idempotencyKey])
+  @@map("address_change_request")
+  @@schema("address_change")
+}
+
+model SubmittedAddress {
+  submittedAddressId     String   @id @default(dbgenerated("gen_random_uuid()")) @map("submitted_address_id") @db.Uuid
+  requestId              String   @unique @map("request_id") @db.Uuid
+  oldAddressLineOne      String   @map("old_address_line_one")
+  oldAddressLineTwo      String?  @map("old_address_line_two")
+  oldCity                String   @map("old_city")
+  oldProvince            String   @map("old_province")
+  oldPostalCode          String   @map("old_postal_code")
+  oldCountry             String   @map("old_country")
+  newAddressLineOne      String   @map("new_address_line_one")
+  newAddressLineTwo      String?  @map("new_address_line_two")
+  newCity                String   @map("new_city")
+  newProvince            String   @map("new_province")
+  newPostalCode          String   @map("new_postal_code")
+  newCountry             String   @map("new_country")
+  isMailingAddressSame   Boolean  @map("is_mailing_address_same")
+  mailingAddressLineOne  String?  @map("mailing_address_line_one")
+  mailingAddressLineTwo  String?  @map("mailing_address_line_two")
+  mailingCity            String?  @map("mailing_city")
+  mailingProvince        String?  @map("mailing_province")
+  mailingPostalCode      String?  @map("mailing_postal_code")
+  mailingCountry         String?  @map("mailing_country")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy              String   @default(dbgenerated("CURRENT_USER")) @map("created_by")
+  updatedAt              DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy              String   @default(dbgenerated("CURRENT_USER")) @map("updated_by")
+
+  request AddressChangeRequest @relation(fields: [requestId], references: [requestId], onDelete: Cascade)
+
+  @@map("submitted_address")
+  @@schema("address_change")
+}
+
+model RequestPerson {
+  requestId                     String    @id @map("request_id") @db.Uuid
+  firstName                     String    @map("first_name")
+  firstMiddleInitial            String?   @map("first_middle_initial")
+  secondMiddleInitial           String?   @map("second_middle_initial")
+  lastName                      String    @map("last_name")
+  dateOfBirth                   DateTime  @map("date_of_birth") @db.Date
+  emailAddress                  String?   @map("email_address")
+  daytimePhone                  String?   @map("daytime_phone")
+  driversLicenseNumberEncrypted Bytes?    @map("drivers_license_number_encrypted")
+  heightCm                      Decimal?  @map("height_cm") @db.Decimal
+  weightKg                      Decimal?  @map("weight_kg") @db.Decimal
+  phnEncrypted                  Bytes?    @map("phn_encrypted")
+  securityKeywordEncrypted      Bytes?    @map("security_keyword_encrypted")
+  createdAt                     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy                     String    @default(dbgenerated("CURRENT_USER")) @map("created_by")
+  updatedAt                     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy                     String    @default(dbgenerated("CURRENT_USER")) @map("updated_by")
+
+  request AddressChangeRequest @relation(fields: [requestId], references: [requestId], onDelete: Cascade)
+
+  @@map("request_person")
+  @@schema("address_change")
+}
+
+model FlatFileBatch {
+  batchId       String    @id @default(dbgenerated("gen_random_uuid()")) @map("batch_id") @db.Uuid
+  partnerId     String    @map("partner_id") @db.Uuid
+  fileDate      DateTime  @map("file_date") @db.Date
+  status        String    @default("BUILDING")
+  fileName      String?   @map("file_name")
+  recordCount   Int       @default(0) @map("record_count")
+  checksum      String?
+  fileContent   Bytes?    @map("file_content")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  generatedAt   DateTime? @map("generated_at") @db.Timestamptz(6)
+  transferredAt DateTime? @map("transferred_at") @db.Timestamptz(6)
+  createdBy     String    @default(dbgenerated("CURRENT_USER")) @map("created_by")
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedBy     String    @default(dbgenerated("CURRENT_USER")) @map("updated_by")
+
+  partner    PartnerSystem         @relation(fields: [partnerId], references: [partnerId])
+  operations ProcessingOperation[]
+
+  @@unique([batchId, partnerId])
+  @@unique([partnerId, fileName])
+  @@map("flat_file_batch")
+  @@schema("address_change")
+}
+
+model ProcessingOperation {
+  operationId  String   @id @default(dbgenerated("gen_random_uuid()")) @map("operation_id") @db.Uuid
+  requestId    String   @map("request_id") @db.Uuid
+  batchId      String?  @map("batch_id") @db.Uuid
+  partnerId    String   @map("partner_id") @db.Uuid
+  deliveryMode String   @map("delivery_mode")
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  createdBy    String   @default(dbgenerated("CURRENT_USER")) @map("created_by")
+  updatedBy    String   @default(dbgenerated("CURRENT_USER")) @map("updated_by")
+
+  request AddressChangeRequest @relation(fields: [requestId], references: [requestId], onDelete: Cascade)
+  partner PartnerSystem        @relation(fields: [partnerId], references: [partnerId])
+  batch   FlatFileBatch?       @relation(fields: [batchId, partnerId], references: [batchId, partnerId])
+
+  @@unique([requestId, partnerId])
+  @@map("processing_operation")
+  @@schema("address_change")
+}

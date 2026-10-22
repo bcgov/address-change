@@ -267,6 +267,9 @@ instance/
 .scrapy
 
 # Sphinx documentation
+
+# others
+localtest.txt
 docs/_build/
 
 # PyBuilder

@@ -27,12 +27,14 @@ services:
     build: ./migrations
     container_name: migrations
     command: info migrate info
-    volumes: ["./migrations/sql:/flyway/sql:ro"]
+    volumes: ["./migrations/sql:/flyway/sql:ro", "./migrations/seed:/flyway/seed:ro"]
     environment:
       FLYWAY_URL: jdbc:postgresql://database:5432/postgres
       FLYWAY_USER: *POSTGRES_USER
       FLYWAY_PASSWORD: *POSTGRES_PASSWORD
       FLYWAY_DEFAULT_SCHEMA: address_change
+      # Seed folder is local-only; the migrations image copies sql/ alone.
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql,filesystem:/flyway/seed
     depends_on:
       database:
         condition: service_healthy
