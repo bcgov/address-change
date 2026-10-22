@@ -15,6 +15,8 @@ type Props<T extends FieldValues> = {
   description?: string
   /** When provided, shows a BC address search that reports the chosen suggestion. */
   onAddressSelected?: (suggestion: AddressSuggestion) => void
+  /** Fixes the province to British Columbia and shows it as text instead of an input. */
+  lockToBritishColumbia?: boolean
 }
 
 /** Reusable set of address inputs bound to `${prefix}.{field}`. */
@@ -24,12 +26,13 @@ export default function AddressFields<T extends FieldValues>({
   legend,
   description,
   onAddressSelected,
+  lockToBritishColumbia,
 }: Props<T>) {
   const path = (field: string) => `${prefix}.${field}` as Path<T>
   return (
     <FormSection description={description} title={legend}>
       {onAddressSelected && <AddressSearch onSelect={onAddressSelected} />}
-      <div className="field-grid">
+      <div className="field-grid field-grid--two">
         <FormField
           autoComplete="address-line1"
           control={control}
@@ -43,6 +46,8 @@ export default function AddressFields<T extends FieldValues>({
           label="Address line 2"
           name={path('addressLineTwo')}
         />
+      </div>
+      <div className="field-grid address-locality-row">
         <FormField
           autoComplete="address-level2"
           control={control}
@@ -50,14 +55,16 @@ export default function AddressFields<T extends FieldValues>({
           label="City"
           name={path('locality')}
         />
-        <SelectField
-          autoComplete="address-level1"
-          control={control}
-          isRequired
-          label="Province"
-          name={path('region')}
-          options={[...CANADIAN_PROVINCES]}
-        />
+        {!lockToBritishColumbia && (
+          <SelectField
+            autoComplete="address-level1"
+            control={control}
+            isRequired
+            label="Province"
+            name={path('region')}
+            options={[...CANADIAN_PROVINCES]}
+          />
+        )}
         <FormField
           autoComplete="postal-code"
           control={control}
@@ -66,6 +73,7 @@ export default function AddressFields<T extends FieldValues>({
           label="Postal code"
           name={path('postalCode')}
         />
+        {lockToBritishColumbia && <p className="address-province">British Columbia, Canada</p>}
       </div>
     </FormSection>
   )

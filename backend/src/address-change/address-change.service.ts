@@ -4,6 +4,7 @@ import {
   ConflictException,
   HttpException,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common'
@@ -11,18 +12,22 @@ import { Prisma } from '../../generated/prisma/client.js'
 import { PrismaService } from '../prisma.service'
 import type {
   AddressChangeAcknowledgement,
+  AddressChangeDraft,
+  AddressChangeDraftResponse,
   AddressChangeRequest,
   AddressChangeSummary,
 } from './address-change.contract'
 import { RequestEncryptionService } from './request-encryption.service'
 
-type StoredRequest = { request_id: string; raw_payload_encrypted: Uint8Array }
+type StoredRequest = { request_id: string; status: string; raw_payload_encrypted: Uint8Array }
 type Partner = { partner_id: string; partner_code: string; delivery_mode: string }
 type RequestSummaryRow = {
   request_id: string
   status: string
-  effective_date: string
+  effective_date: string | null
   created_at: Date
+  updated_at: Date
+  submitted_at: Date | null
   partner_code: string | null
   delivery_mode: string | null
   operation_status: string | null
@@ -38,7 +43,8 @@ export class AddressChangeService {
   async list(ownerSub: string): Promise<AddressChangeSummary[]> {
     if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
     const rows = await this.database.$queryRaw<RequestSummaryRow[]>`
-      SELECT r.request_id::text, r.status, r.effective_date::text, r.created_at,
+      SELECT r.request_id::text, r.status, r.effective_date::text, r.created_at, r.updated_at,
+             MIN(o.created_at) OVER (PARTITION BY r.request_id) AS submitted_at,
              p.partner_code, o.delivery_mode, o.status AS operation_status
       FROM address_change.address_change_request r
       LEFT JOIN address_change.processing_operation o ON o.request_id = r.request_id
@@ -63,6 +69,8 @@ export class AddressChangeService {
         status: row.status,
         effectiveDate: row.effective_date,
         createdAt: new Date(row.created_at).toISOString(),
+        submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
+        updatedAt: new Date(row.updated_at).toISOString(),
         operations:
           row.partner_code && row.delivery_mode && row.operation_status
             ? [
@@ -82,11 +90,40 @@ export class AddressChangeService {
     body: AddressChangeRequest,
     ownerSub: string,
   ): Promise<AddressChangeAcknowledgement> {
+    return this.withRetry(ownerSub, () => this.save(body, ownerSub))
+  }
+
+  async saveDraft(
+    body: AddressChangeDraft,
+    ownerSub: string,
+  ): Promise<AddressChangeAcknowledgement> {
+    return this.withRetry(ownerSub, () => this.upsertDraft(body, ownerSub))
+  }
+
+  async getDraft(requestId: string, ownerSub: string): Promise<AddressChangeDraftResponse> {
+    if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
+    const rows = await this.database.$queryRaw<(StoredRequest & { idempotency_key: string })[]>`
+      SELECT request_id::text, status, idempotency_key, raw_payload_encrypted
+      FROM address_change.address_change_request
+      WHERE request_id = ${requestId}::uuid AND owner_sub = ${ownerSub} AND status = 'DRAFT'`
+    const row = rows[0]
+    if (!row) throw new NotFoundException('Draft not found')
+    return {
+      requestId: row.request_id,
+      idempotencyKey: row.idempotency_key,
+      status: 'DRAFT',
+      draft: JSON.parse(
+        this.encryption.decrypt(row.raw_payload_encrypted, `request:${row.request_id}:payload`),
+      ),
+    }
+  }
+
+  private async withRetry<T>(ownerSub: string, operation: () => Promise<T>): Promise<T> {
     if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
     // Retry only aborted DB transactions, never a partner call (none happens during intake).
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        return await this.save(body, ownerSub)
+        return await operation()
       } catch (error) {
         if (error instanceof HttpException) throw error
         const dbError = error as { code?: string; meta?: { code?: string } }
@@ -103,6 +140,54 @@ export class AddressChangeService {
     throw new ServiceUnavailableException('Request could not be saved')
   }
 
+  private upsertDraft(
+    body: AddressChangeDraft,
+    ownerSub: string,
+  ): Promise<AddressChangeAcknowledgement> {
+    return this.database.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${ownerSub}, 0))`
+        const existing = await tx.$queryRaw<StoredRequest[]>`
+          SELECT request_id::text, status, raw_payload_encrypted
+          FROM address_change.address_change_request
+          WHERE owner_sub = ${ownerSub} AND idempotency_key = ${body.idempotencyKey}`
+        const previous = existing[0]
+        if (previous) {
+          if (previous.status !== 'DRAFT') {
+            throw new ConflictException('This request has already been submitted')
+          }
+          const payload = this.encryption.encrypt(
+            JSON.stringify(body.draft),
+            `request:${previous.request_id}:payload`,
+          )
+          await tx.$executeRaw`
+            UPDATE address_change.address_change_request
+            SET raw_payload_encrypted = ${payload}, updated_at = now(), updated_by = ${ownerSub}
+            WHERE request_id = ${previous.request_id}::uuid`
+          return { requestId: previous.request_id }
+        }
+        const active = await tx.$queryRaw<{ request_id: string }[]>`
+          SELECT request_id FROM address_change.address_change_request
+          WHERE owner_sub = ${ownerSub} AND status NOT IN ('COMPLETED', 'CLOSED') LIMIT 1`
+        if (active.length)
+          throw new ConflictException('An address-change request is already active')
+        const requestId = randomUUID()
+        const payload = this.encryption.encrypt(
+          JSON.stringify(body.draft),
+          `request:${requestId}:payload`,
+        )
+        await tx.$executeRaw`
+          INSERT INTO address_change.address_change_request
+            (request_id, owner_sub, idempotency_key, raw_payload_encrypted, status,
+             created_by, updated_by)
+          VALUES (${requestId}::uuid, ${ownerSub}, ${body.idempotencyKey}, ${payload}, 'DRAFT',
+                  ${ownerSub}, ${ownerSub})`
+        return { requestId }
+      },
+      { isolationLevel: 'ReadCommitted', maxWait: 5000, timeout: 15000 },
+    )
+  }
+
   private save(
     body: AddressChangeRequest,
     ownerSub: string,
@@ -113,11 +198,12 @@ export class AddressChangeService {
         // locking also works through transaction-mode PgBouncer; collisions only wait.
         await tx.$queryRaw`SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${ownerSub}, 0))`
         const existing = await tx.$queryRaw<StoredRequest[]>`
-          SELECT request_id, raw_payload_encrypted
+          SELECT request_id::text, status, raw_payload_encrypted
           FROM address_change.address_change_request
           WHERE owner_sub = ${ownerSub} AND idempotency_key = ${body.idempotencyKey}`
         const previous = existing[0]
-        if (previous) {
+        const draft = previous?.status === 'DRAFT' ? previous : undefined
+        if (previous && !draft) {
           const stored = JSON.parse(
             this.encryption.decrypt(
               previous.raw_payload_encrypted,
@@ -129,13 +215,16 @@ export class AddressChangeService {
           }
           return { requestId: previous.request_id }
         }
-        const active = await tx.$queryRaw<{ request_id: string }[]>`
-          SELECT request_id FROM address_change.address_change_request
-          WHERE owner_sub = ${ownerSub} AND status NOT IN ('COMPLETED', 'CLOSED') LIMIT 1`
-        if (active.length)
-          throw new ConflictException('An address-change request is already active')
+        if (!draft) {
+          const active = await tx.$queryRaw<{ request_id: string }[]>`
+            SELECT request_id FROM address_change.address_change_request
+            WHERE owner_sub = ${ownerSub} AND status NOT IN ('COMPLETED', 'CLOSED') LIMIT 1`
+          if (active.length)
+            throw new ConflictException('An address-change request is already active')
+        }
 
         const codes = [
+          ...(body.notificationIntent.notifyBcsc ? ['BCSC'] : []),
           ...(body.notificationIntent.notifyIcbc ? ['ICBC'] : []),
           ...(body.notificationIntent.notifyMsp ? ['HEALTH'] : []),
         ]
@@ -154,7 +243,7 @@ export class AddressChangeService {
           throw new ServiceUnavailableException('Submission statuses are not configured')
         }
 
-        const requestId = randomUUID()
+        const requestId = draft?.request_id ?? randomUUID()
         const payload = this.encryption.encrypt(
           JSON.stringify(body),
           `request:${requestId}:payload`,
@@ -166,12 +255,20 @@ export class AddressChangeService {
         const licence = secret(person.driversLicenseNumber, 'drivers_license_number')
         const phn = secret(person.phn, 'phn')
         const keyword = secret(person.securityKeyword, 'security_keyword')
-        await tx.$executeRaw`
-          INSERT INTO address_change.address_change_request
-            (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date,
-             status, created_by, updated_by)
-          VALUES (${requestId}::uuid, ${ownerSub}, ${body.idempotencyKey}, ${payload},
-                  ${body.effectiveDate}::date, 'SUBMITTED', ${ownerSub}, ${ownerSub})`
+        if (draft) {
+          await tx.$executeRaw`
+            UPDATE address_change.address_change_request
+            SET raw_payload_encrypted = ${payload}, effective_date = ${body.effectiveDate}::date,
+                status = 'SUBMITTED', updated_at = now(), updated_by = ${ownerSub}
+            WHERE request_id = ${requestId}::uuid`
+        } else {
+          await tx.$executeRaw`
+            INSERT INTO address_change.address_change_request
+              (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date,
+               status, created_by, updated_by)
+            VALUES (${requestId}::uuid, ${ownerSub}, ${body.idempotencyKey}, ${payload},
+                    ${body.effectiveDate}::date, 'SUBMITTED', ${ownerSub}, ${ownerSub})`
+        }
         await tx.$executeRaw`
           INSERT INTO address_change.request_person
             (request_id, first_name, first_middle_initial, second_middle_initial, last_name,

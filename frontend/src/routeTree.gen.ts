@@ -35,16 +35,18 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedAddressChangeIndexRoute = AuthenticatedAddressChangeIndexRouteImport.update({
-  id: '/address-change/',
-  path: '/address-change/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedAddressChangeNewRoute = AuthenticatedAddressChangeNewRouteImport.update({
-  id: '/address-change/new',
-  path: '/address-change/new',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
+const AuthenticatedAddressChangeIndexRoute =
+  AuthenticatedAddressChangeIndexRouteImport.update({
+    id: '/address-change/',
+    path: '/address-change/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAddressChangeNewRoute =
+  AuthenticatedAddressChangeNewRouteImport.update({
+    id: '/address-change/new',
+    path: '/address-change/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -71,9 +73,19 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/auth/callback' | '/address-change/new' | '/address-change/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/auth/callback'
+    | '/address-change/new'
+    | '/address-change/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/auth/callback' | '/address-change/new' | '/address-change'
+  to:
+    | '/'
+    | '/login'
+    | '/auth/callback'
+    | '/address-change/new'
+    | '/address-change'
   id:
     | '__root__'
     | '/'

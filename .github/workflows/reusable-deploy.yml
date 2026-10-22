@@ -84,7 +84,18 @@ jobs:
     environment: ${{ inputs.environment }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Hash migrations
+        id: migrations
+        run: |
+          set -euo pipefail
+          hash=$(find migrations/sql -type f -name '*.sql' | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
       - name: Check disposable database password
         env:
           DB_PASSWORD: ${{ secrets.db_password }}
@@ -107,6 +118,25 @@ jobs:
             -p ZONE="${{ inputs.target }}"
             -p NAME="${{ github.event.repository.name }}"
           triggers: ${{ inputs.triggers }}
+      # Flyway rejects edited or reordered migrations on an already-migrated
+      # database. Disposable PR databases are rebuilt when the migrations change.
+      - name: Reset disposable database if migrations changed
+        uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_server: ${{ vars.oc_server }}
+          oc_token: ${{ secrets.oc_token }}
+          commands: |
+            set -euo pipefail
+            sts="${{ github.event.repository.name }}-${{ inputs.target }}-database"
+            if [ -n "$(oc get statefulset "$sts" -o name --ignore-not-found)" ]; then
+              current=$(oc get statefulset "$sts" -o jsonpath='{.metadata.annotations.migrations-hash}')
+              if [ "$current" != "${{ steps.migrations.outputs.hash }}" ]; then
+                echo "Migrations changed; recreating $sts and its volume."
+                oc delete statefulset "$sts" --cascade=foreground --wait=true
+                oc delete pvc "data-$sts-0" --ignore-not-found --wait=true --timeout=180s
+              fi
+            fi
       - uses: bcgov/action-deployer-openshift@e2d60eb9cacceb89c3b97d8dcf0a2c460eea5eab # v4.2.3
         with:
           file: common/openshift.database.yml
@@ -117,6 +147,16 @@ jobs:
             -p ZONE="${{ inputs.target }}"
             -p NAME="${{ github.event.repository.name }}"
           triggers: ${{ inputs.triggers }}
+      - name: Record migrations hash
+        uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
+        with:
+          oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_server: ${{ vars.oc_server }}
+          oc_token: ${{ secrets.oc_token }}
+          commands: |
+            set -euo pipefail
+            oc annotate statefulset "${{ github.event.repository.name }}-${{ inputs.target }}-database" \
+              migrations-hash="${{ steps.migrations.outputs.hash }}" --overwrite
 
   deploy:
     name: Deploy (${{ matrix.name }})
