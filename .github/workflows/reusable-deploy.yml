@@ -142,6 +142,11 @@ jobs:
               -p DB_PASSWORD_KEY="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'password' || 'database-password' }}"
               -p DB_SSLMODE="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'require' || 'disable' }}"
               -p DB_CLIENT="${{ (inputs.environment == 'test' || inputs.environment == 'prod') && 'address-change' || 'disposable' }}"
+              -p OIDC_ISSUER="${{ vars.OIDC_ISSUER }}"
+              -p OIDC_AUDIENCE="${{ vars.OIDC_AUDIENCE }}"
+              -p OIDC_JWKS_URI="${{ vars.OIDC_JWKS_URI }}"
+              -p OIDC_SUBMISSION_SCOPE="${{ vars.OIDC_SUBMISSION_SCOPE }}"
+              -p ENCRYPTION_KEY_ID="${{ vars.ENCRYPTION_KEY_ID }}"
           - name: frontend
             file: frontend/openshift.deploy.yml
             parameters: -p IMAGE_TAG="${{ inputs.tag }}"

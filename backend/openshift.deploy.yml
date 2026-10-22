@@ -58,6 +58,24 @@ parameters:
   - name: DB_CLIENT
     description: Label used by the loc-tools Patroni ingress policy
     value: disposable
+  - name: OIDC_ISSUER
+    description: OIDC issuer URL used to validate access tokens
+    required: true
+  - name: OIDC_AUDIENCE
+    description: Expected access token audience
+    required: true
+  - name: OIDC_JWKS_URI
+    description: JWKS endpoint used to verify access token signatures
+    required: true
+  - name: OIDC_SUBMISSION_SCOPE
+    description: Scope required to submit address change requests
+    required: true
+  - name: ENCRYPTION_KEY_ID
+    description: ID of the active request encryption key
+    required: true
+  - name: APP_SECRET
+    description: Pre-created Secret holding ADDRESS_CHANGE_ENCRYPTION_KEYS
+    value: address-change-app
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -187,6 +205,21 @@ objects:
                   value: ${DB_SSLMODE}
                 - name: POSTGRES_SCHEMA
                   value: "address_change"
+                - name: OIDC_ISSUER
+                  value: ${OIDC_ISSUER}
+                - name: OIDC_AUDIENCE
+                  value: ${OIDC_AUDIENCE}
+                - name: OIDC_JWKS_URI
+                  value: ${OIDC_JWKS_URI}
+                - name: OIDC_SUBMISSION_SCOPE
+                  value: ${OIDC_SUBMISSION_SCOPE}
+                - name: ADDRESS_CHANGE_ENCRYPTION_KEY_ID
+                  value: ${ENCRYPTION_KEY_ID}
+                - name: ADDRESS_CHANGE_ENCRYPTION_KEYS
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${APP_SECRET}
+                      key: ADDRESS_CHANGE_ENCRYPTION_KEYS
               resources:
                 requests:
                   cpu: ${CPU_REQUEST}
