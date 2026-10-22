@@ -120,6 +120,7 @@ export const addressChangeSummarySchema = z
     status: nonBlankString,
     effectiveDate: z.string().nullable(),
     createdAt: z.string().datetime(),
+    submittedAt: z.string().datetime().nullable(),
     updatedAt: z.string().datetime(),
     operations: z.array(addressChangeOperationStatusSchema),
   })

@@ -252,11 +252,11 @@ describe('AddressChange intake HTTP + SQL integration', () => {
     expect(result.rows).toEqual([{ partner_code: 'HEALTH', delivery_mode: 'REALTIME' }])
   })
   it('preserves Unicode, apostrophes and separate mailing address verbatim', async () => {
-    const name = 'Sḵwx̱wú7mesh O’Test ᐊᓂᔑᓈᐯ'
+    const name = 'Sá¸µwxÌ±wÃº7mesh Oâ€™Test áŠá“‚á”‘á“ˆá¯'
     const mailing = {
       ...validRequest.newAddress,
       addressLineOne: "42 Test's Way",
-      locality: 'W̱SÁNEĆ',
+      locality: 'WÌ±SÃNEÄ†',
     }
     await submit({
       ...validRequest,
@@ -357,7 +357,26 @@ describe('AddressChange intake HTTP + SQL integration', () => {
         .set('Authorization', 'Bearer synthetic-A')
         .expect(200)
       expect(list.body).toEqual([
-        expect.objectContaining({ status: 'DRAFT', effectiveDate: null, operations: [] }),
+        expect.objectContaining({
+          status: 'DRAFT',
+          effectiveDate: null,
+          submittedAt: null,
+          operations: [],
+        }),
+      ])
+    })
+    it('lists the submission time of a submitted draft', async () => {
+      await saveDraft({ idempotencyKey: validRequest.idempotencyKey, draft }).expect(200)
+      await submit().expect(202)
+      const list = await request(app.getHttpServer())
+        .get('/api/v1/address-change')
+        .set('Authorization', 'Bearer synthetic-A')
+        .expect(200)
+      expect(list.body).toEqual([
+        expect.objectContaining({
+          status: 'SUBMITTED',
+          submittedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        }),
       ])
     })
     it('promotes the draft to SUBMITTED on submit with the same request id', async () => {

@@ -13,6 +13,7 @@ export type AddressChangeSummary = {
   status: string
   effectiveDate: string | null
   createdAt: string
+  submittedAt: string | null
   updatedAt: string
   operations: AddressChangeOperation[]
 }

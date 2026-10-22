@@ -27,6 +27,7 @@ type RequestSummaryRow = {
   effective_date: string | null
   created_at: Date
   updated_at: Date
+  submitted_at: Date | null
   partner_code: string | null
   delivery_mode: string | null
   operation_status: string | null
@@ -43,6 +44,7 @@ export class AddressChangeService {
     if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
     const rows = await this.database.$queryRaw<RequestSummaryRow[]>`
       SELECT r.request_id::text, r.status, r.effective_date::text, r.created_at, r.updated_at,
+             MIN(o.created_at) OVER (PARTITION BY r.request_id) AS submitted_at,
              p.partner_code, o.delivery_mode, o.status AS operation_status
       FROM address_change.address_change_request r
       LEFT JOIN address_change.processing_operation o ON o.request_id = r.request_id
@@ -67,6 +69,7 @@ export class AddressChangeService {
         status: row.status,
         effectiveDate: row.effective_date,
         createdAt: new Date(row.created_at).toISOString(),
+        submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
         updatedAt: new Date(row.updated_at).toISOString(),
         operations:
           row.partner_code && row.delivery_mode && row.operation_status
