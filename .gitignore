@@ -416,3 +416,10 @@ backend/generated/
 # OS
 .DS_Store
 Thumbs.db
+
+
+# APM dependencies
+apm_modules/
+
+# Per-user agent preferences
+.agents/local/

@@ -1,25 +1,26 @@
 # AGENTS.md
 
-Repository facts for automated coding assistants. Teams may edit or remove this file.
+Repository facts for automated coding assistants. Keep every `AGENTS.md` at or under 100 lines; put directory-specific detail in that directory's own `AGENTS.md`.
 
-## Layout
-- `backend/` (NestJS, Prisma), `frontend/` (Vite, React, Caddy), `migrations/` (Flyway SQL in `migrations/sql/`)
+## Navigation
+- Use [.agents/INDEX.md](.agents/INDEX.md) to find where to read or edit when the location isn't obvious. Keep it to key entry points; update it only when one is added, moved, or removed.
+- Scan [.agents/RULES.md](.agents/RULES.md); read a rule only when its description fits the task.
+- Read the nearest directory `AGENTS.md` before changing files there: [backend](backend/AGENTS.md), [frontend](frontend/AGENTS.md), [migrations](migrations/AGENTS.md), [common](common/AGENTS.md), [.github](.github/AGENTS.md).
+- Skills live in `.agents/skills/`. Use `start-restart` to run the app locally; `github-actions` and `openshift-deployment` are installed through APM (`apm.yml`, `apm.lock.yaml`) and must not be hand-edited.
+
+## Stack
+- `backend/` (NestJS, Prisma), `frontend/` (Vite, React, Caddy), `migrations/` (Flyway SQL), `common/` (OpenShift templates, tests), `scripts/` (setup)
 - PostgreSQL major version is 18 across local development, PR previews, CI, and Patroni TEST/PROD. Official PostgreSQL clients/images are pinned to 18.6; Spilo/backup patch levels must be verified independently.
-- TEST/PROD consume Patroni provisioned in the same namespace by `loc-tools`; PRs retain disposable databases. Application migrations target `address_change`. `migrations/sql/` starts empty; add application-specific migrations there.
-- OpenShift templates (not Helm): `common/openshift.init.yml`, `common/openshift.database.yml`, `common/openshift.database-init.yml` (PR database credentials/policy), `backend/openshift.deploy.yml`, `frontend/openshift.deploy.yml`
-- Workflows: `.github/workflows/` (PR deploys via `reusable-deploy.yml`, tests via `reusable-tests.yml`); integration and load tests in `common/tests/`
-
-## Build, test, run
+- TEST/PROD consume Patroni provisioned in the same namespace by `loc-tools`; PRs retain disposable databases.
+- Deploys to OpenShift run from GitHub Actions (PR open, merge), not from a workstation.
 - Full stack locally: `docker compose up` (optional profiles: `schemaspy`, `caddy`)
-- Backend (`cd backend`): `npm ci`, `npm run build`, `npm run lint`, `npm test`, `npm run test:cov`
-- Frontend (`cd frontend`): `npm ci`, `npm run build`, `npm run lint`, `npm run test:unit`; e2e: `npx playwright install --with-deps chromium`, then `npx playwright test --project="chromium"`
-- Deploys to OpenShift run from GitHub Actions (PR open, merge), not from a workstation
 
-## Shared actions
-- Uses bcgov shared actions and workflows (`bcgov/action-*`, `bcgov/actions/*`, `bcgov/actions-openshift/*`, `bcgov/quickstart-openshift-helpers`). Use them as provided; don't copy or fork them.
-- Never pin `@main`. Pin bcgov shared actions to a published release SHA with a `# vX.Y.Z` comment.
-- Vanity Route TLS (`bcgov/actions-openshift/route-tls`) is strictly managed via the standalone on-demand workflow (`.github/workflows/route-tls.yml` with `workflow_dispatch`). Never embed `route-tls` into `merge.yml`, `release.yml`, or continuous deployment pipelines.
+## Delegation
+- Give sub-agents a bounded task, relevant paths, constraints, and the expected evidence or deliverable. Do not delegate when coordination costs more than doing the work.
+- Routine work (running start-restart, simple checks, small documentation edits) suits a lighter model; keep design decisions and ambiguous failures with the primary agent.
 
-## Settings
-- Automated agents must not change repository or organization settings. Settings changes are made by a person on the team with the setup scripts in `scripts/`; agents may run them only without `--apply`, which previews.
-- After a repository is created from the template, suggest running `scripts/setup.sh`.
+## Guardrails
+- Do NOT read `.env` files; read only `.env.example` (if present) and tell the user what to update.
+- Do NOT update `README.md` without approval.
+- Write commit messages per [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/) (`type(scope): description`; `!` or a `BREAKING CHANGE:` footer for breaking changes). Commit only when asked.
+- Run the relevant build, lint, and test commands from the directory's `AGENTS.md` after changes, and report anything not run.
