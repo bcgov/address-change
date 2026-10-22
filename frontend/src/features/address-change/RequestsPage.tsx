@@ -26,6 +26,8 @@ const RequestsPage: FC = () => {
     <section aria-labelledby="requests-heading">
       <PageHeading
         actions={
+          !isLoading &&
+          !loadError &&
           !hasActiveRequest && (
             <Button onPress={() => void navigate({ to: '/address-change/new' })}>
               New request

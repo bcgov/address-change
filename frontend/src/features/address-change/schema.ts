@@ -33,6 +33,13 @@ export const addressChangeFormSchema = z
     notifyMsp: z.boolean(),
   })
   .superRefine((values, ctx) => {
+    if (!values.notifyIcbc && !values.notifyMsp) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Select at least one service to notify',
+        path: ['notifyIcbc'],
+      })
+    }
     if (values.mailingSameAsResidential) return
     const result = addressSchema.safeParse(values.mailingAddress)
     if (!result.success) {

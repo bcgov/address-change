@@ -106,6 +106,7 @@ export const addressChangeContract = contract.router({
     responses: {
       200: z.array(addressChangeSummarySchema),
       401: errorSchema,
+      403: errorSchema,
       503: errorSchema,
     },
     summary: 'List address-change requests for the authenticated resident',
