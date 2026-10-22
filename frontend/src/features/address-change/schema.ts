@@ -8,7 +8,9 @@ const addressSchema = z.object({
   addressLineOne: required('Enter address line 1'),
   addressLineTwo: z.string().trim().optional(),
   locality: required('Enter a city'),
-  region: z.literal('BC', 'Your new address must be in British Columbia'),
+  region: z.literal('BC', {
+    errorMap: () => ({ message: 'Your new address must be in British Columbia' }),
+  }),
   postalCode: required('Enter a postal code').refine(isValidPostalCode, {
     message: 'Enter a valid postal code, like V8V 1A1',
   }),
