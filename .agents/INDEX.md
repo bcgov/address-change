@@ -1,0 +1,15 @@
+# Project index
+
+Entry points that help agents find what to read or edit. List only important files and folders, not everything; directory detail lives in each directory's `AGENTS.md`. Paths are relative to the repository root.
+
+| Path | Short description |
+| --- | --- |
+| `.agents/skills/start-restart/SKILL.md` | Start/restart the app locally using the user's remembered method. |
+| `.agents/skills/` | Other skills (`github-actions`, `openshift-deployment`) are APM-managed via `apm.yml`. |
+| `backend/` | NestJS/Prisma API; see `backend/AGENTS.md`. |
+| `frontend/` | Vite/React app served by Caddy; see `frontend/AGENTS.md`. |
+| `migrations/sql/` | Flyway SQL migrations for `address_change`; see `migrations/AGENTS.md`. |
+| `common/` | OpenShift templates and integration/load tests; see `common/AGENTS.md`. |
+| `.github/workflows/` | CI/CD workflows; see `.github/AGENTS.md`. |
+| `docker-compose.yml` | Local database, migrations, backend, frontend, and optional profiles. |
+| `.vscode/launch.json` | "Debug full stack" configuration and local env values. |

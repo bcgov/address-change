@@ -1,0 +1,16 @@
+name: address-change
+version: 1.0.0
+description: APM project for address-change
+author: BradyMitch
+# Which agent platforms to deploy to.
+# Resolution order: --target flag > this field > auto-detect from filesystem.
+# Accepted values: agent-skills, antigravity, claude, codex, copilot, cursor, gemini, grok-bot, grok-build, hermes, kiro, opencode, vscode, windsurf
+targets:
+  - copilot
+dependencies:
+  apm:
+    - bcgov/agent-marketplace/skills/community/github-actions#2046da7b0de0f673bf39208b35385c1516be4c75
+    - bcgov/agent-marketplace/skills/community/openshift-deployment#2046da7b0de0f673bf39208b35385c1516be4c75
+  mcp: []
+includes: auto
+scripts: {}
