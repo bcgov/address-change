@@ -1,0 +1,114 @@
+lockfile_version: '1'
+apm_version: 0.34.0
+dependencies:
+- repo_url: bcgov/agent-marketplace
+  name: github-actions
+  host: github.com
+  resolved_commit: 2046da7b0de0f673bf39208b35385c1516be4c75
+  resolved_ref: 2046da7b0de0f673bf39208b35385c1516be4c75
+  version: unknown
+  virtual_path: skills/community/github-actions
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/github-actions
+  - .agents/skills/github-actions/SKILL.md
+  - .agents/skills/github-actions/bcgov-extension.yaml
+  - .agents/skills/github-actions/references/REFERENCE.md
+  deployed_file_hashes:
+    .agents/skills/github-actions/SKILL.md: sha256:db4c7c33bcca1413b8cc1fdbd49612ef706c2eb67acf007b1daa79239353a4b3
+    .agents/skills/github-actions/bcgov-extension.yaml: sha256:c2224b634c542a76fb7cf9a59a34f3037268d6bccc5d01e643008284b315047e
+    .agents/skills/github-actions/references/REFERENCE.md: sha256:75bfbe56ba2bddd085b2878c261197d85e60d298f0dd0129647769f463fbe566
+  content_hash: sha256:0fb63333c933e3b275ae28d626e481f41821187adda8def3edc31b34dd7c9bb8
+- repo_url: bcgov/agent-marketplace
+  name: openshift-deployment
+  host: github.com
+  resolved_commit: 2046da7b0de0f673bf39208b35385c1516be4c75
+  resolved_ref: 2046da7b0de0f673bf39208b35385c1516be4c75
+  version: unknown
+  virtual_path: skills/community/openshift-deployment
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/openshift-deployment
+  - .agents/skills/openshift-deployment/SKILL.md
+  - .agents/skills/openshift-deployment/bcgov-extension.yaml
+  - .agents/skills/openshift-deployment/references/REFERENCE.md
+  deployed_file_hashes:
+    .agents/skills/openshift-deployment/SKILL.md: sha256:3f23ff8fb6ce97442080318a3f05678040d407ed3f899b26c281de1720efc5e4
+    .agents/skills/openshift-deployment/bcgov-extension.yaml: sha256:9d845500e2be0d687cabe6db2839b6fb1a07137423bdce4dd566413063d204c7
+    .agents/skills/openshift-deployment/references/REFERENCE.md: sha256:331430ddc0819ba7bce912be98674f2d86db5a2e633921e31a69f49f4da6fd00
+  content_hash: sha256:f9b36a06f2416ac4de9bc49b380f96c3c41cda45a201c9707083c4fdfb612ce1
+deployments:
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-actions
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/github-actions
+  active_owner: bcgov/agent-marketplace/skills/community/github-actions
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-actions/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/github-actions
+  active_owner: bcgov/agent-marketplace/skills/community/github-actions
+  content_hash: sha256:db4c7c33bcca1413b8cc1fdbd49612ef706c2eb67acf007b1daa79239353a4b3
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-actions/bcgov-extension.yaml
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/github-actions
+  active_owner: bcgov/agent-marketplace/skills/community/github-actions
+  content_hash: sha256:c2224b634c542a76fb7cf9a59a34f3037268d6bccc5d01e643008284b315047e
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-actions/references/REFERENCE.md
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/github-actions
+  active_owner: bcgov/agent-marketplace/skills/community/github-actions
+  content_hash: sha256:75bfbe56ba2bddd085b2878c261197d85e60d298f0dd0129647769f463fbe566
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/openshift-deployment
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/openshift-deployment
+  active_owner: bcgov/agent-marketplace/skills/community/openshift-deployment
+  content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/openshift-deployment/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/openshift-deployment
+  active_owner: bcgov/agent-marketplace/skills/community/openshift-deployment
+  content_hash: sha256:3f23ff8fb6ce97442080318a3f05678040d407ed3f899b26c281de1720efc5e4
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/openshift-deployment/bcgov-extension.yaml
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/openshift-deployment
+  active_owner: bcgov/agent-marketplace/skills/community/openshift-deployment
+  content_hash: sha256:9d845500e2be0d687cabe6db2839b6fb1a07137423bdce4dd566413063d204c7
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/openshift-deployment/references/REFERENCE.md
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/openshift-deployment
+  active_owner: bcgov/agent-marketplace/skills/community/openshift-deployment
+  content_hash: sha256:331430ddc0819ba7bce912be98674f2d86db5a2e633921e31a69f49f4da6fd00
