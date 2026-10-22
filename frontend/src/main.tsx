@@ -4,6 +4,7 @@ import { StrictMode } from 'react'
 import * as ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { AuthProvider } from '@/auth/AuthProvider'
+import { loadRuntimeConfig } from '@/auth/auth-service'
 
 // Import bootstrap styles
 import '@/scss/styles.scss'
@@ -21,6 +22,8 @@ declare module '@tanstack/react-router' {
     router: typeof router
   }
 }
+
+await loadRuntimeConfig()
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>

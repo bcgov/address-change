@@ -149,7 +149,11 @@ jobs:
               -p ENCRYPTION_KEY_ID="${{ vars.ENCRYPTION_KEY_ID }}"
           - name: frontend
             file: frontend/openshift.deploy.yml
-            parameters: -p IMAGE_TAG="${{ inputs.tag }}"
+            parameters: >-
+              -p IMAGE_TAG="${{ inputs.tag }}"
+              -p OIDC_AUTHORITY="${{ vars.OIDC_ISSUER }}"
+              -p OIDC_CLIENT_ID="${{ vars.OIDC_AUDIENCE }}"
+              -p OIDC_SCOPE="openid profile email ${{ vars.OIDC_SUBMISSION_SCOPE }}"
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
     steps:
