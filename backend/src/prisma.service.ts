@@ -4,17 +4,6 @@ import { PrismaClient, Prisma } from '../generated/prisma/client.js'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
-const DB_HOST = process.env.POSTGRES_HOST || 'localhost'
-const DB_USER = process.env.POSTGRES_USER || 'postgres'
-const DB_PWD = encodeURIComponent(process.env.POSTGRES_PASSWORD || 'default')
-const DB_PORT = process.env.POSTGRES_PORT || 5432
-const DB_NAME = process.env.POSTGRES_DATABASE || 'postgres'
-const DB_SCHEMA = process.env.POSTGRES_SCHEMA || 'address_change'
-const PGBOUNCER_URL = process.env.PGBOUNCER_URL
-const dataSourceURL = PGBOUNCER_URL
-  ? `${PGBOUNCER_URL}?schema=${DB_SCHEMA}&pgbouncer=true`
-  : `postgresql://${DB_USER}:${DB_PWD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=${DB_SCHEMA}&connection_limit=5`
-
 const PrismaClientWithLogs = PrismaClient as unknown as new (
   options?: Prisma.PrismaClientOptions,
 ) => PrismaClient<'query' | 'info' | 'warn' | 'error'>
@@ -28,13 +17,23 @@ class PrismaService extends PrismaClientWithLogs implements OnModuleInit, OnModu
     if (PrismaService.instance) {
       return PrismaService.instance
     }
+    const dbHost = process.env.POSTGRES_HOST || 'localhost'
+    const dbUser = process.env.POSTGRES_USER || 'postgres'
+    const dbPassword = encodeURIComponent(process.env.POSTGRES_PASSWORD || 'default')
+    const dbPort = process.env.POSTGRES_PORT || 5432
+    const dbName = process.env.POSTGRES_DATABASE || 'postgres'
+    const dbSchema = process.env.POSTGRES_SCHEMA || 'address_change'
+    const pgbouncerUrl = process.env.PGBOUNCER_URL
+    const dataSourceURL = pgbouncerUrl
+      ? `${pgbouncerUrl}?schema=${dbSchema}&pgbouncer=true`
+      : `postgresql://${dbUser}:${dbPassword}@${dbHost}:${dbPort}/${dbName}?schema=${dbSchema}&connection_limit=5`
     const pool = new Pool({
       connectionString: dataSourceURL,
       // Patroni's internal certificate is self-signed. Match libpq sslmode=require:
       // encrypt the connection without requiring a public CA certificate.
       ssl: process.env.POSTGRES_SSLMODE === 'require' ? { rejectUnauthorized: false } : undefined,
     })
-    const adapter = new PrismaPg(pool, { schema: DB_SCHEMA })
+    const adapter = new PrismaPg(pool, { schema: dbSchema })
     super({
       adapter,
       errorFormat: 'pretty',
@@ -42,7 +41,6 @@ class PrismaService extends PrismaClientWithLogs implements OnModuleInit, OnModu
         { emit: 'event', level: 'query' },
         { emit: 'stdout', level: 'info' },
         { emit: 'stdout', level: 'warn' },
-        { emit: 'stdout', level: 'error' },
       ],
     })
     this.pool = pool
@@ -58,7 +56,9 @@ class PrismaService extends PrismaClientWithLogs implements OnModuleInit, OnModu
       if (excludedPatterns.some((pattern) => e?.query?.toUpperCase().includes(pattern))) {
         return
       }
-      this.logger.log(`Query: ${e.query} - Params: ${e.params} - Duration: ${e.duration}ms`)
+      // Request intake binds names, addresses and encrypted fields. Do not emit
+      // parameters, SQL text, or raw database errors into application logs.
+      this.logger.debug(`Database query completed in ${e.duration}ms`)
     })
   }
 

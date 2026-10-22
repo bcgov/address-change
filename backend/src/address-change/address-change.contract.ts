@@ -60,6 +60,9 @@ export const addressChangeRequestSchema = z
   .refine((value) => value.isBillingAddressSame || value.mailingAddress !== undefined, {
     path: ['mailingAddress'],
   })
+  .refine((value) => value.notificationIntent.notifyIcbc || value.notificationIntent.notifyMsp, {
+    path: ['notificationIntent'],
+  })
 
 export const addressChangeAcknowledgementSchema = z
   .object({
@@ -67,23 +70,57 @@ export const addressChangeAcknowledgementSchema = z
   })
   .strict()
 
+const addressChangeOperationStatusSchema = z
+  .object({
+    partnerCode: nonBlankString,
+    deliveryMode: nonBlankString,
+    status: nonBlankString,
+  })
+  .strict()
+
+export const addressChangeSummarySchema = z
+  .object({
+    requestId: z.string().uuid(),
+    status: nonBlankString,
+    effectiveDate: z.string(),
+    createdAt: z.string().datetime(),
+    operations: z.array(addressChangeOperationStatusSchema),
+  })
+  .strict()
+
 export type AddressChangeRequest = z.infer<typeof addressChangeRequestSchema>
 export type AddressChangeAcknowledgement = z.infer<typeof addressChangeAcknowledgementSchema>
+export type AddressChangeSummary = z.infer<typeof addressChangeSummarySchema>
 
 const contract = initContract()
+const errorSchema = z.object({
+  statusCode: z.number(),
+  message: z.string(),
+  error: z.string(),
+})
 
 export const addressChangeContract = contract.router({
+  list: {
+    method: 'GET',
+    path: ADDRESS_CHANGE_ROUTE,
+    responses: {
+      200: z.array(addressChangeSummarySchema),
+      401: errorSchema,
+      503: errorSchema,
+    },
+    summary: 'List address-change requests for the authenticated resident',
+  },
   submit: {
     method: 'POST',
     path: ADDRESS_CHANGE_ROUTE,
     body: addressChangeRequestSchema,
     responses: {
       202: addressChangeAcknowledgementSchema,
-      400: z.object({
-        statusCode: z.number(),
-        message: z.string(),
-        error: z.string(),
-      }),
+      400: errorSchema,
+      401: errorSchema,
+      403: errorSchema,
+      409: errorSchema,
+      503: errorSchema,
     },
     summary: 'Accept an address change request',
   },

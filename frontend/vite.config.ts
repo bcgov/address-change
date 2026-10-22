@@ -13,7 +13,7 @@ export default defineConfig({
     react(),
   ],
   server: {
-    port: parseInt(process.env.PORT),
+    port: parseInt(process.env.PORT || '5173', 10),
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],
@@ -21,7 +21,7 @@ export default defineConfig({
     proxy: {
       // Proxy API requests to the backend
       '/api': {
-        target: process.env.BACKEND_URL ?? 'http://localhost:3001',
+        target: process.env.BACKEND_URL ?? 'http://localhost:3000',
         changeOrigin: true,
       },
     },

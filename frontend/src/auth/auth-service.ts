@@ -13,7 +13,7 @@ export function createUserManager(): UserManager {
     redirect_uri: `${origin}${AUTH_CALLBACK_PATH}`,
     post_logout_redirect_uri: `${origin}/login`,
     response_type: 'code', // authorization code flow; oidc-client-ts always adds PKCE (S256)
-    scope: 'openid profile email',
+    scope: import.meta.env.VITE_OIDC_SCOPE ?? 'openid profile email',
     automaticSilentRenew: true, // refreshes the token via the refresh_token grant before expiry
     userStore: new WebStorageStateStore({ store: window.sessionStorage }),
   })
