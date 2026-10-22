@@ -44,14 +44,22 @@ export type InitialDraft = {
 
 type Props = {
   initialDraft?: InitialDraft
+  onDraftCreated?: (requestId: string) => void
   onSubmitted?: (requestId: string) => void
   onReturnHome?: () => void
   onCancel?: () => void
 }
 
-const AddressChangeForm: FC<Props> = ({ initialDraft, onSubmitted, onReturnHome, onCancel }) => {
+const AddressChangeForm: FC<Props> = ({
+  initialDraft,
+  onDraftCreated,
+  onSubmitted,
+  onReturnHome,
+  onCancel,
+}) => {
   const { user } = useAuth()
   const draft = useRequestDraft(initialDraft?.idempotencyKey)
+  const draftAnnouncedRef = useRef(Boolean(initialDraft))
   const [step, setStep] = useState(() => Math.min(Math.max(initialDraft?.step ?? 0, 0), LAST_STEP))
   const [phase, setPhase] = useState<'editing' | 'submitting' | 'done'>('editing')
   const [requestId, setRequestId] = useState('')
@@ -95,7 +103,11 @@ const AddressChangeForm: FC<Props> = ({ initialDraft, onSubmitted, onReturnHome,
     setError(null)
     setIsSaving(true)
     try {
-      await draft.save(target, getValues())
+      const savedId = await draft.save(target, getValues())
+      if (!draftAnnouncedRef.current) {
+        draftAnnouncedRef.current = true
+        onDraftCreated?.(savedId)
+      }
       setStep(target)
     } catch {
       if (blockOnFailure) {
@@ -113,10 +125,8 @@ const AddressChangeForm: FC<Props> = ({ initialDraft, onSubmitted, onReturnHome,
     if (valid) await goTo(step + 1, { blockOnFailure: true })
   }
 
-  const firstInvalidStep = () => {
-    const errors = formState.errors as Record<string, unknown>
-    return fields.findIndex((names) => names.some((name) => name in errors))
-  }
+  const firstInvalidStep = (errors: Record<string, unknown>) =>
+    fields.findIndex((names) => names.some((name) => name in errors))
 
   const submit = handleSubmit(
     async (values) => {
@@ -134,8 +144,8 @@ const AddressChangeForm: FC<Props> = ({ initialDraft, onSubmitted, onReturnHome,
         setError('We could not submit your request. Please try again.')
       }
     },
-    () => {
-      const target = firstInvalidStep()
+    (errors) => {
+      const target = firstInvalidStep(errors as Record<string, unknown>)
       if (target >= 0 && target !== step) setStep(target)
     },
   )

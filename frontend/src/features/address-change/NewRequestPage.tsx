@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AlertBanner } from '@bcgov/design-system-react-components'
@@ -18,9 +18,11 @@ const NewRequestPage: FC = () => {
   const [state, setState] = useState<DraftState>(
     draftId ? { status: 'loading' } : { status: 'idle' },
   )
+  // A draft created by this form is already in memory; don't reload it after the URL changes.
+  const createdDraftIdRef = useRef<string>()
 
   useEffect(() => {
-    if (!draftId) return
+    if (!draftId || draftId === createdDraftIdRef.current) return
     let cancelled = false
     getAddressChangeDraft(draftId)
       .then((response) => {
@@ -75,6 +77,14 @@ const NewRequestPage: FC = () => {
         <AddressChangeForm
           initialDraft={state.status === 'ready' ? state.draft : undefined}
           onCancel={goHome}
+          onDraftCreated={(requestId) => {
+            createdDraftIdRef.current = requestId
+            void navigate({
+              to: '/address-change/new',
+              search: { draft: requestId },
+              replace: true,
+            })
+          }}
           onReturnHome={goHome}
         />
       )}

@@ -83,7 +83,7 @@ const RequestCard: FC<{ request: AddressChangeSummary; onResume: (id: string) =>
         ) : (
           <>
             <Detail term="Effective date">{formatDate(request.effectiveDate)}</Detail>
-            <Detail term="Submitted">{formatDate(request.createdAt)}</Detail>
+            <Detail term="Started">{formatDate(request.createdAt)}</Detail>
             <Detail term="Last changed">{formatDate(request.updatedAt)}</Detail>
             <Detail className="request-id" term="Request ID">
               {request.requestId}
