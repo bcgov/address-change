@@ -39,6 +39,8 @@ jobs:
     name: Deploys (${{ github.event.number }})
     needs: [builds]
     uses: ./.github/workflows/reusable-deploy.yml
+    permissions:
+      contents: read
     secrets:
       db_password: ${{ secrets.db_password }}
       oc_token: ${{ secrets.oc_token }}
