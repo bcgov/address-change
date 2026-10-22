@@ -14,6 +14,8 @@ export default defineConfig({
   ],
   server: {
     port: parseInt(process.env.PORT || '5173', 10),
+    // Bind-mounted Windows files emit no change events inside containers
+    watch: process.env.USE_POLLING ? { usePolling: true, interval: 300 } : undefined,
     fs: {
       // Allow serving files from one level up to the project root
       allow: ['..'],

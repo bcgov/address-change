@@ -11,6 +11,7 @@ type Props<T extends FieldValues> = {
   isRequired?: boolean
   description?: string
   autoComplete?: string
+  isDisabled?: boolean
 }
 
 /** react-hook-form bound BC Gov design system select. Stores the option `value`. */
@@ -20,6 +21,7 @@ export default function SelectField<T extends FieldValues>({
   label,
   options,
   isRequired,
+  isDisabled,
   description,
   autoComplete,
 }: Props<T>) {
@@ -32,6 +34,7 @@ export default function SelectField<T extends FieldValues>({
           autoComplete={autoComplete}
           description={description}
           errorMessage={fieldState.error?.message}
+          isDisabled={isDisabled}
           isInvalid={fieldState.invalid}
           isRequired={isRequired}
           items={options.map((option) => ({ id: option.value, label: option.label }))}

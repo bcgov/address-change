@@ -5,13 +5,18 @@ import {
   Header,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
+  Put,
   Req,
   UseGuards,
 } from '@nestjs/common'
 import { ADDRESS_CHANGE_PATH, API_VERSION, addressChangeContract } from './address-change.contract'
 import type {
   AddressChangeAcknowledgement,
+  AddressChangeDraft,
+  AddressChangeDraftResponse,
   AddressChangeRequest,
   AddressChangeSummary,
 } from './address-change.contract'
@@ -32,6 +37,30 @@ export class AddressChangeController {
   @HttpCode(HttpStatus.OK)
   list(@Req() request: AuthenticatedRequest): Promise<AddressChangeSummary[]> {
     return this.service.list(request.ownerSub)
+  }
+
+  @Put('drafts')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.OK)
+  saveDraft(
+    @Body(new ZodValidationPipe(addressChangeContract.saveDraft.body))
+    body: AddressChangeDraft,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<AddressChangeAcknowledgement> {
+    return this.service.saveDraft(body, request.ownerSub)
+  }
+
+  @Get('drafts/:requestId')
+  @UseGuards(AccessTokenGuard)
+  @Header('Cache-Control', 'no-store, max-age=0')
+  @Header('Pragma', 'no-cache')
+  @Header('Vary', 'Authorization')
+  @HttpCode(HttpStatus.OK)
+  getDraft(
+    @Param('requestId', new ParseUUIDPipe()) requestId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<AddressChangeDraftResponse> {
+    return this.service.getDraft(requestId, request.ownerSub)
   }
 
   @Post()

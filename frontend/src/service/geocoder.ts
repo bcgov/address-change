@@ -46,6 +46,7 @@ export async function searchAddresses(
     autoComplete: 'true',
     maxResults: String(MAX_RESULTS),
     echo: 'false',
+    preferredEncoding: 'ascii',
   })
   const response = await fetch(`${baseUrl}/addresses.json?${params}`, { signal })
   if (!response.ok) {

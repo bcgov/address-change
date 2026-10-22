@@ -41,6 +41,7 @@ describe('searchAddresses', () => {
     const results = await searchAddresses('1 Main')
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('autoComplete=true')
+    expect(String(fetchMock.mock.calls[0][0])).toContain('preferredEncoding=ascii')
     expect(String(fetchMock.mock.calls[0][0])).toContain('addressString=1+Main')
     expect(results).toHaveLength(1)
     expect(results[0]).toMatchObject({ addressLineOne: '1 Main St', region: 'BC' })
