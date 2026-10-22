@@ -62,9 +62,10 @@ const AddressChangeForm: FC<Props> = ({ initialDraft, onSubmitted, onReturnHome,
     useForm<AddressChangeFormValues>({
       resolver: zodResolver(addressChangeFormSchema),
       mode: 'onChange',
-      defaultValues: initialDraft
-        ? mergeDraftValues(initialDraft.values)
-        : { ...defaultFormValues(), dateOfBirth: user?.birthdate ?? '' },
+      defaultValues: {
+        ...(initialDraft ? mergeDraftValues(initialDraft.values) : defaultFormValues()),
+        ...(user?.birthdate ? { dateOfBirth: user.birthdate } : {}),
+      },
     })
   const mailingSame = watch('mailingSameAsResidential')
   const notifyIcbc = watch('notifyIcbc')
