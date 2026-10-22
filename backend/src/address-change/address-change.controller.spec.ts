@@ -152,7 +152,7 @@ describe('AddressChange intake HTTP + SQL integration', () => {
     expect(saved).toMatchObject({
       request_id: response.body.requestId,
       owner_sub: 'resident-A',
-      status: 'PENDING',
+      status: 'SUBMITTED',
       status_category: 'REQUEST',
       created_by: 'resident-A',
     })
@@ -360,13 +360,13 @@ describe('AddressChange intake HTTP + SQL integration', () => {
         expect.objectContaining({ status: 'DRAFT', effectiveDate: null, operations: [] }),
       ])
     })
-    it('promotes the draft to PENDING on submit with the same request id', async () => {
+    it('promotes the draft to SUBMITTED on submit with the same request id', async () => {
       const created = await saveDraft({ idempotencyKey: validRequest.idempotencyKey, draft })
       const response = await submit().expect(202)
       expect(response.body.requestId).toBe(created.body.requestId)
       expect(await rows('address_change_request')).toHaveLength(1)
       expect((await rows('address_change_request'))[0]).toMatchObject({
-        status: 'PENDING',
+        status: 'SUBMITTED',
         effective_date: expect.anything(),
       })
       expect(await rows('processing_operation')).toHaveLength(2)

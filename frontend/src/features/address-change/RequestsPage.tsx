@@ -12,7 +12,6 @@ import { formatDate, PARTNER_NAMES } from './format'
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Draft',
-  PENDING: 'Pending',
   SUBMITTED: 'Submitted',
   PROCESSING: 'Processing',
   PENDING_DELIVERY: 'Pending delivery',

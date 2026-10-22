@@ -234,7 +234,7 @@ export class AddressChangeService {
         }
         const statuses = await tx.$queryRaw<{ status_code: string }[]>`
           SELECT status_code FROM address_change.status_type WHERE active = true AND
-          ((status_category = 'REQUEST' AND status_code = 'PENDING') OR
+          ((status_category = 'REQUEST' AND status_code = 'SUBMITTED') OR
            (status_category = 'OPERATION' AND status_code = 'PENDING')) FOR SHARE`
         if (statuses.length !== 2) {
           throw new ServiceUnavailableException('Submission statuses are not configured')
@@ -256,7 +256,7 @@ export class AddressChangeService {
           await tx.$executeRaw`
             UPDATE address_change.address_change_request
             SET raw_payload_encrypted = ${payload}, effective_date = ${body.effectiveDate}::date,
-                status = 'PENDING', updated_at = now(), updated_by = ${ownerSub}
+                status = 'SUBMITTED', updated_at = now(), updated_by = ${ownerSub}
             WHERE request_id = ${requestId}::uuid`
         } else {
           await tx.$executeRaw`
@@ -264,7 +264,7 @@ export class AddressChangeService {
               (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date,
                status, created_by, updated_by)
             VALUES (${requestId}::uuid, ${ownerSub}, ${body.idempotencyKey}, ${payload},
-                    ${body.effectiveDate}::date, 'PENDING', ${ownerSub}, ${ownerSub})`
+                    ${body.effectiveDate}::date, 'SUBMITTED', ${ownerSub}, ${ownerSub})`
         }
         await tx.$executeRaw`
           INSERT INTO address_change.request_person

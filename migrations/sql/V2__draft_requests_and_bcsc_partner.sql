@@ -1,8 +1,8 @@
 -- Draft requests and the BC Services Card partner.
 -- A DRAFT row holds only the encrypted, partially completed form in raw_payload_encrypted.
--- Person, address and operation rows are written when the draft is submitted (DRAFT -> PENDING).
+-- Person, address and operation rows are written when the draft is submitted (DRAFT -> SUBMITTED).
 INSERT INTO address_change.status_type (status_category, status_code, display_name)
-VALUES ('REQUEST', 'DRAFT', 'Draft'), ('REQUEST', 'PENDING', 'Pending');
+VALUES ('REQUEST', 'DRAFT', 'Draft');
 
 ALTER TABLE address_change.address_change_request ALTER COLUMN effective_date DROP NOT NULL;
 ALTER TABLE address_change.address_change_request
