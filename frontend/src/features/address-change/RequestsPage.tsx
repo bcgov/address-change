@@ -27,7 +27,9 @@ const RequestsPage: FC = () => {
       <PageHeading
         actions={
           !hasActiveRequest && (
-            <Button onPress={() => void navigate({ to: '/address-change/new' })}>New request</Button>
+            <Button onPress={() => void navigate({ to: '/address-change/new' })}>
+              New request
+            </Button>
           )
         }
         description="Track the address changes you have submitted."
