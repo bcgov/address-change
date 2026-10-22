@@ -37,6 +37,15 @@ parameters:
   - name: LOG_LEVEL
     description: Caddy log level (debug|info|warn|error)
     value: "info"
+  - name: OIDC_AUTHORITY
+    description: OIDC authority URL the browser signs in against
+    required: true
+  - name: OIDC_CLIENT_ID
+    description: OIDC public client ID
+    required: true
+  - name: OIDC_SCOPE
+    description: Scopes requested at sign-in, including the submission scope
+    required: true
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -114,6 +123,12 @@ objects:
                   value: ${LOG_LEVEL}
                 - name: BACKEND_URL
                   value: http://${NAME}-${ZONE}-backend
+                - name: OIDC_AUTHORITY
+                  value: ${OIDC_AUTHORITY}
+                - name: OIDC_CLIENT_ID
+                  value: ${OIDC_CLIENT_ID}
+                - name: OIDC_SCOPE
+                  value: ${OIDC_SCOPE}
                 # readOnlyRootFilesystem: true → redirect every writable path
                 # onto an emptyDir. Caddy stores config/data under the XDG dirs
                 # (mounted at /tmp/caddy); Coraza writes SecTmpDir/SecDataDir

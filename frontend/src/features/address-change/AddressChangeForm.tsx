@@ -151,6 +151,7 @@ const AddressChangeForm: FC<Props> = ({ onSubmitted, onCancel }) => {
           <CheckboxField control={control} label="BC Drivers License (ICBC)" name="notifyIcbc" />
           <CheckboxField control={control} label="Medical Services Plan (MSP)" name="notifyMsp" />
         </div>
+        {formState.errors.notifyIcbc && <p role="alert">{formState.errors.notifyIcbc.message}</p>}
       </FormSection>
 
       {submitError && (
