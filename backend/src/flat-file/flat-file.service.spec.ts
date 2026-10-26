@@ -115,29 +115,44 @@ describe('FlatFileService.generateForPartner', () => {
   })
 })
 
-describe('FlatFileService.transferBatch', () => {
-  it('claims the batch as TRANSFERRING and records FAILED when SFTP is not configured', async () => {
+describe('FlatFileService transfer', () => {
+  function setupTransfer(upload: ReturnType<typeof vi.fn>) {
     const batch = {
       status: 'READY',
       fileName: 'ICBC.Address.TXT',
       fileContent: Buffer.from('x'),
+      generatedAt: now,
       partner,
     }
     const tx = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
+      $queryRaw: vi.fn().mockResolvedValue([{ id: 'r-1' }]),
       flatFileBatch: { findUniqueOrThrow: vi.fn().mockResolvedValue(batch), update: vi.fn() },
+      processingOperation: {
+        updateMany: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([{ requestId: 'r-1', status: 'SUCCEEDED' }]),
+      },
+      addressChangeRequest: { update: vi.fn() },
     }
     const prisma = {
       $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
-      flatFileBatch: { update: vi.fn() },
+      flatFileBatch: {
+        update: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([{ batchId: 'b-1', partner: { partnerCode: 'ICBC' } }]),
+      },
     }
-    const sftp = { upload: vi.fn().mockRejectedValue(new SftpNotConfiguredError('not enabled')) }
     const service = new FlatFileService(
       prisma as unknown as PrismaService,
-      sftp as unknown as SftpTransport,
+      { upload } as unknown as SftpTransport,
+    )
+    return { service, prisma, tx }
+  }
+
+  it('claims the batch as TRANSFERRING and records FAILED when the upload fails', async () => {
+    const { service, prisma, tx } = setupTransfer(
+      vi.fn().mockRejectedValue(new SftpNotConfiguredError('not configured')),
     )
 
-    await expect(service.transferBatch('b-1')).resolves.toBe('FAILED')
+    await expect(service.transferBatch('b-1')).resolves.toEqual({ status: 'FAILED' })
     expect(tx.flatFileBatch.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'TRANSFERRING' }) }),
     )
@@ -145,5 +160,29 @@ describe('FlatFileService.transferBatch', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
     )
     expect(prisma.$transaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('uploads as <generation timestamp>.txt and marks the batch SENT', async () => {
+    const upload = vi.fn().mockResolvedValue('/inbound/ICBC/20250516191024.txt')
+    const { service, tx } = setupTransfer(upload)
+
+    await expect(service.transferPending()).resolves.toEqual([
+      {
+        partnerCode: 'ICBC',
+        batchId: 'b-1',
+        status: 'SENT',
+        remotePath: '/inbound/ICBC/20250516191024.txt',
+      },
+    ])
+    expect(upload).toHaveBeenCalledWith(partner, '20250516191024.txt', Buffer.from('x'))
+    expect(tx.flatFileBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SENT' }) }),
+    )
+    expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCEEDED' }) }),
+    )
+    expect(tx.addressChangeRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'COMPLETED' }) }),
+    )
   })
 })

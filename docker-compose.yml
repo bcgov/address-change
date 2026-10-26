@@ -49,6 +49,14 @@ services:
         condition: service_completed_successfully
     volumes: ["./output:/output"]
 
+  # Local-only partner SFTP endpoint; users mirror the seeded partner_system usernames.
+  sftp:
+    image: atmoz/sftp:alpine
+    profiles: ["sftp"]
+    container_name: sftp
+    command: sample-icbc:localpass:1001::inbound sample-health:localpass:1002::inbound
+    ports: ["2222:22"]
+
   backend:
     container_name: backend
     depends_on:

@@ -6,8 +6,6 @@ import { type FlatFileRecord, fileStamp, formatterFor } from './flat-file.format
 import { summarizeRequestStatus } from './request-status'
 import { SftpTransport } from './sftp.transport'
 
-// Real partner endpoints are not provisioned yet, so batches stop at READY.
-export const SFTP_ENABLED = false
 export const FLAT_FILE_ACTOR = 'flat-file-job'
 
 export type BatchResult = {
@@ -16,6 +14,13 @@ export type BatchResult = {
   status: 'SKIPPED' | 'READY' | 'FAILED'
   recordCount: number
   fileName?: string
+}
+
+export type TransferResult = {
+  partnerCode: string
+  batchId: string
+  status: 'SENT' | 'FAILED'
+  remotePath?: string
 }
 
 type IdRow = { id: string }
@@ -149,14 +154,38 @@ export class FlatFileService {
     })
   }
 
-  async transferBatch(batchId: string): Promise<'SENT' | 'FAILED'> {
+  async transferPending(): Promise<TransferResult[]> {
+    const batches = await this.prisma.flatFileBatch.findMany({
+      where: { status: 'READY', fileContent: { not: null } },
+      orderBy: { generatedAt: 'asc' },
+      select: { batchId: true, partner: { select: { partnerCode: true } } },
+    })
+    const results: TransferResult[] = []
+    for (const { batchId, partner } of batches) {
+      try {
+        results.push({
+          partnerCode: partner.partnerCode,
+          batchId,
+          ...(await this.transferBatch(batchId)),
+        })
+      } catch (err) {
+        this.logger.error(`Transfer of batch ${batchId} could not start: ${(err as Error).message}`)
+        results.push({ partnerCode: partner.partnerCode, batchId, status: 'FAILED' })
+      }
+    }
+    return results
+  }
+
+  async transferBatch(
+    batchId: string,
+  ): Promise<{ status: 'SENT' | 'FAILED'; remotePath?: string }> {
     const claimed = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT batch_id FROM address_change.flat_file_batch WHERE batch_id = ${batchId}::uuid FOR UPDATE`
       const batch = await tx.flatFileBatch.findUniqueOrThrow({
         where: { batchId },
         include: { partner: true },
       })
-      if (batch.status !== 'READY' || !batch.fileName || !batch.fileContent) {
+      if (batch.status !== 'READY' || !batch.fileName || !batch.fileContent || !batch.generatedAt) {
         throw new Error(`Batch ${batchId} is not a generated READY batch`)
       }
       await tx.flatFileBatch.update({
@@ -166,10 +195,13 @@ export class FlatFileService {
       return batch
     })
 
+    // Temporary remote naming until partners confirm theirs; generation time keeps retries idempotent.
+    const { date, time } = fileStamp(claimed.generatedAt as Date)
+    let remotePath: string
     try {
-      await this.sftp.upload(
+      remotePath = await this.sftp.upload(
         claimed.partner,
-        claimed.fileName as string,
+        `${date}${time}.txt`,
         Buffer.from(claimed.fileContent as Uint8Array),
       )
     } catch (err) {
@@ -179,11 +211,11 @@ export class FlatFileService {
         where: { batchId },
         data: { status: 'FAILED', updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR },
       })
-      return 'FAILED'
+      return { status: 'FAILED' }
     }
 
     await this.prisma.$transaction((tx) => this.markSent(tx, batchId))
-    return 'SENT'
+    return { status: 'SENT', remotePath }
   }
 
   private async markSent(tx: Prisma.TransactionClient, batchId: string): Promise<void> {

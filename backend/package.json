@@ -15,6 +15,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "flat-files:generate": "nest start --entryFile flat-file/generate-flat-files",
+    "flat-files:transfer": "nest start --entryFile flat-file/transfer-flat-files",
     "sftp:encrypt-password": "nest build 1>&2 && node dist/flat-file/encrypt-sftp-password.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",

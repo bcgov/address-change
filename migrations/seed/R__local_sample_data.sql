@@ -46,13 +46,16 @@ WHERE r.request_id IN ('11111111-1111-4111-8111-111111111111', '22222222-2222-42
   AND p.delivery_mode = 'FLAT_FILE'
 ON CONFLICT DO NOTHING;
 
+-- Points both partners at the local `sftp` compose service (password "localpass").
+-- The password is encrypted with the throwaway local-only key
+-- SFTP_CREDENTIAL_ENCRYPTION_KEY=gdxNFKnHOBe947MQ19SOfeAusFG5BwJHwVlzHa8jBA0= (never use outside local dev).
 UPDATE address_change.partner_system
-SET sftp_host = 'sftp.example.invalid',
-    sftp_port = 22,
+SET sftp_host = 'localhost',
+    sftp_port = 2222,
     sftp_username = 'sample-' || lower(partner_code),
-    sftp_auth_method = 'PRIVATE_KEY',
-    sftp_key_path = '/var/run/secrets/sftp/' || lower(partner_code) || '/id_ed25519',
+    sftp_auth_method = 'PASSWORD',
+    sftp_encrypted_password = '\x017a5d59c21034f157d1c7076cf425cea6fb69dcf14ab2fb462dfbb8436a21c71de2d25ce656'::bytea,
+    sftp_key_path = NULL,
     sftp_remote_directory = '/inbound',
     updated_at = now(),
-    updated_by = 'local-seed'
-WHERE sftp_auth_method IS NULL;
+    updated_by = 'local-seed';

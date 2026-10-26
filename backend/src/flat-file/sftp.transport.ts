@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { posix } from 'node:path'
 import { Injectable, Logger } from '@nestjs/common'
-// import SftpClient from 'ssh2-sftp-client'
+import SftpClient from 'ssh2-sftp-client'
 import type { PartnerSystem } from '../../generated/prisma/client.js'
 import { decryptSecret, loadCredentialKey } from './sftp-credential.crypto'
 
@@ -17,7 +17,7 @@ export type SftpConnectOptions = {
   privateKey?: Buffer
 }
 
-export type SftpTarget = { options: SftpConnectOptions; remotePath: string }
+export type SftpTarget = { options: SftpConnectOptions; remoteDir: string; remotePath: string }
 
 type PartnerSftpSettings = Pick<
   PartnerSystem,
@@ -56,20 +56,25 @@ export class SftpTransport {
         `SFTP credentials incomplete for partner ${partner.partnerCode}`,
       )
     }
-    return { options, remotePath: posix.join(sftpRemoteDirectory, fileName) }
+    // Each partner gets its own folder under the configured directory, e.g. /inbound/ICBC.
+    const remoteDir = posix.join(sftpRemoteDirectory, partner.partnerCode)
+    return { options, remoteDir, remotePath: posix.join(remoteDir, fileName) }
   }
 
-  async upload(partner: PartnerSftpSettings, fileName: string, _content: Buffer): Promise<void> {
+  async upload(partner: PartnerSftpSettings, fileName: string, content: Buffer): Promise<string> {
     const target = await this.resolveTarget(partner, fileName)
     this.logger.log(`Uploading ${fileName} to ${target.options.host}:${target.remotePath}`)
-    // Enable once real partner SFTP endpoints and credentials are provisioned.
-    // const client = new SftpClient()
-    // try {
-    //   await client.connect(target.options)
-    //   await client.put(_content, target.remotePath)
-    // } finally {
-    //   await client.end()
-    // }
-    throw new SftpNotConfiguredError('SFTP upload is not enabled yet')
+    const client = new SftpClient()
+    try {
+      await client.connect(target.options)
+      if (!(await client.exists(target.remoteDir))) {
+        await client.mkdir(target.remoteDir, true)
+      }
+      await client.put(content, target.remotePath)
+    } finally {
+      // end() rejects when connect() never succeeded; keep the original error.
+      await client.end().catch(() => undefined)
+    }
+    return target.remotePath
   }
 }
