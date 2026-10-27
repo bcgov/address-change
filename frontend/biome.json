@@ -1,0 +1,63 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "files": {
+    "includes": [
+      "src/**/*.{ts,tsx}",
+      "!src/routeTree.gen.ts",
+      "!**/public",
+      "!**/dist",
+      "!**/coverage",
+      "!**/node_modules"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "off" } } },
+  "linter": {
+    "enabled": true,
+    "domains": { "react": "recommended" },
+    "rules": {
+      "preset": "recommended",
+      "complexity": { "noBannedTypes": "off" },
+      "correctness": {
+        "useExhaustiveDependencies": "warn",
+        "noUnusedVariables": {
+          "level": "error",
+          "options": { "ignoreRestSiblings": true }
+        },
+        "noUnusedFunctionParameters": {
+          "level": "error",
+          "options": { "ignoreRestSiblings": true }
+        }
+      },
+      "a11y": {
+        "useSemanticElements": "off",
+        "noNoninteractiveTabindex": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useImportType": "error"
+      },
+      "suspicious": {
+        "noConsole": "off",
+        "noDebugger": "warn",
+        "noExplicitAny": "off",
+        "noEmptyBlockStatements": "off"
+      }
+    }
+  }
+}
