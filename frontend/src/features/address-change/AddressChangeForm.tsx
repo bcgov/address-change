@@ -80,6 +80,7 @@ const AddressChangeForm: FC<Props> = ({
   const acknowledged = watch('collectionNoticeAcknowledged')
   const currentValues = watch()
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when the step or phase changes
   useEffect(() => {
     window.scrollTo({ top: 0 })
     headingRef.current?.focus({ preventScroll: true })
