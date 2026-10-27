@@ -21,9 +21,14 @@
 
 	root * /srv
 	encode zstd gzip
+	# Runtime OIDC settings so one image works in every environment
+	handle /config.json {
+		header Content-Type application/json
+		respond `{"oidcAuthority":"{$OIDC_AUTHORITY:}","oidcClientId":"{$OIDC_CLIENT_ID:}","oidcScope":"{$OIDC_SCOPE:}"}` 200
+	}
 	file_server
 	@spa_router {
-		not path /api*
+		not path /api* /config.json
 		file {
 			try_files {path} /index.html
 		}

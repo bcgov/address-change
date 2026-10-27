@@ -9,11 +9,27 @@ import { MetricsController } from './metrics.controller'
 import { TerminusModule } from '@nestjs/terminus'
 import { HealthController } from './health.controller'
 import { AddressChangeController } from './address-change/address-change.controller'
+import { AddressChangeService } from './address-change/address-change.service'
+import { RequestEncryptionService } from './address-change/request-encryption.service'
+import { AccessTokenGuard, AccessTokenVerifier } from './auth/access-token.guard'
 
 @Module({
-  imports: [ConfigModule.forRoot({ ignoreEnvFile: true }), TerminusModule],
+  imports: [
+    ConfigModule.forRoot({
+      envFilePath: ['.env.local', '.env'],
+      ignoreEnvFile: false,
+    }),
+    TerminusModule,
+  ],
   controllers: [AppController, MetricsController, HealthController, AddressChangeController],
-  providers: [AppService, PrismaService],
+  providers: [
+    AppService,
+    PrismaService,
+    AddressChangeService,
+    RequestEncryptionService,
+    AccessTokenGuard,
+    AccessTokenVerifier,
+  ],
 })
 export class AppModule {
   // let's add a middleware on all routes

@@ -1,19 +1,23 @@
 import { useCallback, useState } from 'react'
+import { saveAddressChangeDraft } from './api'
 import type { AddressChangeFormValues } from './schema'
 
 export type RequestDraft = {
-  /** Stable per-form key; doubles as the idempotency key for submission. */
+  /** Stable per-request key; the draft is stored under it and it is reused for final submission. */
   idempotencyKey: string
-  /** Called when form values change. No-op until the database-backed draft API exists. */
-  scheduleSave: (values: Partial<AddressChangeFormValues>) => void
+  /** Saves the form and current step to the server and returns the draft's request ID. Rejects if the save fails. */
+  save: (step: number, values: AddressChangeFormValues) => Promise<string>
 }
 
-/**
- * Seam for the future draft lifecycle (create draft on start, debounced incremental
- * autosave, submit). Today it only provides the idempotency key.
- */
-export function useRequestDraft(): RequestDraft {
-  const [idempotencyKey] = useState(() => crypto.randomUUID())
-  const scheduleSave = useCallback((_values: Partial<AddressChangeFormValues>) => undefined, [])
-  return { idempotencyKey, scheduleSave }
+/** Server-backed draft lifecycle: each save upserts the draft identified by the idempotency key. */
+export function useRequestDraft(existingKey?: string): RequestDraft {
+  const [idempotencyKey] = useState(() => existingKey ?? crypto.randomUUID())
+  const save = useCallback(
+    async (step: number, values: AddressChangeFormValues) => {
+      const ack = await saveAddressChangeDraft(idempotencyKey, { step, values })
+      return ack.requestId
+    },
+    [idempotencyKey],
+  )
+  return { idempotencyKey, save }
 }

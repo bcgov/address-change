@@ -66,6 +66,15 @@ services:
     environment:
       <<: *postgres-vars
       NODE_ENV: development
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://dev.loginproxy.gov.bc.ca/auth/realms/standard}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-address-change-bc-6667}
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:-https://dev.loginproxy.gov.bc.ca/auth/realms/standard/protocol/openid-connect/certs}
+      OIDC_SUBMISSION_SCOPE: ${OIDC_SUBMISSION_SCOPE:-address-change-bc-6667}
+      ADDRESS_CHANGE_ENCRYPTION_KEY_ID: local-v1
+      # Throwaway key for the local database only; override with LOCAL_ENCRYPTION_KEY.
+      ADDRESS_CHANGE_ENCRYPTION_KEYS: '{"local-v1":"${LOCAL_ENCRYPTION_KEY:-sBdUoJ4xi4yk3S3zX/RwPR3DdbXhDeVLx+IbO+/mKmI=}"}'
+      TSC_WATCHFILE: DynamicPriorityPolling
+      TSC_WATCHDIRECTORY: RecursiveDirectoryUsingDynamicPriorityPolling
     image: *node-image
     ports: ["3001:3000"]
     healthcheck:
@@ -80,6 +89,8 @@ services:
       BACKEND_URL: http://backend:3000
       PORT: 3000
       NODE_ENV: development
+      USE_POLLING: "true"
+      VITE_OIDC_SCOPE: openid profile email ${OIDC_SUBMISSION_SCOPE:-address-change-bc-6667}
     image: *node-image
     ports: ["3000:3000"]
     volumes: ["./frontend:/app", "/app/node_modules"]

@@ -1,47 +1,92 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FC } from 'react'
 import { useForm } from 'react-hook-form'
 import { AlertBanner, Button } from '@bcgov/design-system-react-components'
 import { useAuth } from '@/auth/auth-context'
-import AddressFields from '@/components/common/AddressFields'
-import CheckboxField from '@/components/common/CheckboxField'
-import FormField from '@/components/common/FormField'
-import FormSection from '@/components/common/FormSection'
 import { zodResolver } from '@/utils/zod-resolver'
 import type { AddressSuggestion } from '@/service/geocoder'
 import { submitAddressChange } from './api'
 import {
   addressChangeFormSchema,
+  areFieldsValid,
   defaultFormValues,
+  mergeDraftValues,
+  stepFields,
   toAddressChangeRequest,
   type AddressChangeFormValues,
 } from './schema'
+import StepIndicator from './StepIndicator'
+import {
+  CollectionNoticeStep,
+  ConfirmationPanel,
+  NewAddressStep,
+  PartnersStep,
+  ReviewInformationStep,
+  ReviewSubmitStep,
+  SubmittingPanel,
+} from './steps'
 import { useRequestDraft } from './useRequestDraft'
 
+export const STEP_LABELS = [
+  'Collection notice',
+  'Review your information',
+  'Provide new address',
+  'Who needs to know?',
+  'Review and submit',
+]
+const LAST_STEP = STEP_LABELS.length - 1
+
+export type InitialDraft = {
+  idempotencyKey: string
+  step: number
+  values: Record<string, unknown>
+}
+
 type Props = {
+  initialDraft?: InitialDraft
+  onDraftCreated?: (requestId: string) => void
   onSubmitted?: (requestId: string) => void
+  onReturnHome?: () => void
   onCancel?: () => void
 }
 
-const AddressChangeForm: FC<Props> = ({ onSubmitted, onCancel }) => {
+const AddressChangeForm: FC<Props> = ({
+  initialDraft,
+  onDraftCreated,
+  onSubmitted,
+  onReturnHome,
+  onCancel,
+}) => {
   const { user } = useAuth()
-  const draft = useRequestDraft()
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const { control, handleSubmit, watch, setValue, formState } = useForm<AddressChangeFormValues>({
-    resolver: zodResolver(addressChangeFormSchema),
-    mode: 'onChange',
-    defaultValues: { ...defaultFormValues(), dateOfBirth: user?.birthdate ?? '' },
-  })
+  const draft = useRequestDraft(initialDraft?.idempotencyKey)
+  const draftAnnouncedRef = useRef(Boolean(initialDraft))
+  const [step, setStep] = useState(() => Math.min(Math.max(initialDraft?.step ?? 0, 0), LAST_STEP))
+  const [phase, setPhase] = useState<'editing' | 'submitting' | 'done'>('editing')
+  const [requestId, setRequestId] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const { control, handleSubmit, watch, setValue, getValues, trigger, formState } =
+    useForm<AddressChangeFormValues>({
+      resolver: zodResolver(addressChangeFormSchema),
+      mode: 'onChange',
+      defaultValues: {
+        ...(initialDraft ? mergeDraftValues(initialDraft.values) : defaultFormValues()),
+        ...(user?.birthdate ? { dateOfBirth: user.birthdate } : {}),
+      },
+    })
   const mailingSame = watch('mailingSameAsResidential')
-  const { scheduleSave } = draft
+  const notifyIcbc = watch('notifyIcbc')
+  const acknowledged = watch('collectionNoticeAcknowledged')
+  const currentValues = watch()
 
   useEffect(() => {
-    const subscription = watch((values) => scheduleSave(values as Partial<AddressChangeFormValues>))
-    return () => subscription.unsubscribe()
-  }, [watch, scheduleSave])
+    window.scrollTo({ top: 0 })
+    headingRef.current?.focus({ preventScroll: true })
+  }, [step, phase])
 
   if (!user) return null
-  const { currentAddress } = user
+  const fields = stepFields(Boolean(user.birthdate))
 
   const fillAddress = (prefix: 'residentialAddress' | 'mailingAddress') => {
     return (suggestion: AddressSuggestion) => {
@@ -49,123 +94,136 @@ const AddressChangeForm: FC<Props> = ({ onSubmitted, onCancel }) => {
       setValue(`${prefix}.addressLineOne`, suggestion.addressLineOne, options)
       setValue(`${prefix}.addressLineTwo`, '', options)
       setValue(`${prefix}.locality`, suggestion.locality, options)
-      setValue(`${prefix}.region`, suggestion.region, options)
+      setValue(`${prefix}.region`, 'BC', options)
       setValue(`${prefix}.country`, suggestion.country, options)
     }
   }
 
-  const onSubmit = handleSubmit(async (values) => {
-    setSubmitError(null)
+  const goTo = async (target: number, { blockOnFailure }: { blockOnFailure: boolean }) => {
+    setError(null)
+    setIsSaving(true)
     try {
-      const ack = await submitAddressChange(
-        toAddressChangeRequest(values, user, draft.idempotencyKey),
-      )
-      onSubmitted?.(ack.requestId)
+      const savedId = await draft.save(target, getValues())
+      if (!draftAnnouncedRef.current) {
+        draftAnnouncedRef.current = true
+        onDraftCreated?.(savedId)
+      }
+      setStep(target)
     } catch {
-      setSubmitError('We could not submit your request. Please try again.')
+      if (blockOnFailure) {
+        setError('We could not save your progress. Please try again.')
+      } else {
+        setStep(target)
+      }
+    } finally {
+      setIsSaving(false)
     }
-  })
+  }
+
+  const next = async () => {
+    const valid = fields[step].length === 0 || (await trigger([...fields[step]]))
+    if (valid) await goTo(step + 1, { blockOnFailure: true })
+  }
+
+  const firstInvalidStep = (errors: Record<string, unknown>) =>
+    fields.findIndex((names) => names.some((name) => name in errors))
+
+  const submit = handleSubmit(
+    async (values) => {
+      setError(null)
+      setPhase('submitting')
+      try {
+        const ack = await submitAddressChange(
+          toAddressChangeRequest(values, user, draft.idempotencyKey),
+        )
+        setRequestId(ack.requestId)
+        setPhase('done')
+        onSubmitted?.(ack.requestId)
+      } catch {
+        setPhase('editing')
+        setError('We could not submit your request. Please try again.')
+      }
+    },
+    (errors) => {
+      const target = firstInvalidStep(errors as Record<string, unknown>)
+      if (target >= 0 && target !== step) setStep(target)
+    },
+  )
+
+  if (phase === 'submitting') return <SubmittingPanel />
+  if (phase === 'done') {
+    return <ConfirmationPanel onReturnHome={() => onReturnHome?.()} requestId={requestId} />
+  }
+
+  const onFormSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    if (isSaving) return
+    if (step === LAST_STEP) void submit()
+    else if (step !== 0 || acknowledged) void next()
+  }
 
   return (
-    <form aria-label="Address change request" noValidate onSubmit={onSubmit}>
-      <FormSection title="Your details">
-        <dl className="details-list">
-          <dt>Name</dt>
-          <dd>{user.displayName}</dd>
-          {user.birthdate && (
-            <>
-              <dt>Date of birth</dt>
-              <dd>{user.birthdate}</dd>
-            </>
-          )}
-          <dt>Current address</dt>
-          <dd>
-            {currentAddress
-              ? [
-                  currentAddress.addressLineOne,
-                  currentAddress.addressLineTwo,
-                  currentAddress.locality,
-                  currentAddress.region,
-                  currentAddress.postalCode,
-                  currentAddress.country,
-                ]
-                  .filter(Boolean)
-                  .join(', ')
-              : 'No address on file'}
-          </dd>
-        </dl>
-        {!user.birthdate && (
-          <div className="field-grid">
-            <FormField
-              control={control}
-              isRequired
-              label="Date of birth"
-              name="dateOfBirth"
-              type="date"
-            />
-          </div>
-        )}
-      </FormSection>
-
-      <FormSection title="When does your address change?">
-        <div className="field-grid">
-          <FormField
-            control={control}
-            description="The date your new address takes effect."
-            isRequired
-            label="Effective date"
-            name="effectiveDate"
-            type="date"
-          />
-        </div>
-      </FormSection>
-
-      <AddressFields
-        control={control}
-        legend="New residential address"
-        onAddressSelected={fillAddress('residentialAddress')}
-        prefix="residentialAddress"
+    <form aria-label="Address change request" noValidate onSubmit={onFormSubmit}>
+      <StepIndicator
+        current={step}
+        isDisabled={isSaving}
+        onSelect={(target) => void goTo(target, { blockOnFailure: false })}
+        steps={STEP_LABELS}
       />
+      <h3 className="step-heading" ref={headingRef} tabIndex={-1}>
+        {STEP_LABELS[step]}
+      </h3>
 
-      <FormSection title="Mailing address">
-        <CheckboxField
+      {step === 0 && <CollectionNoticeStep control={control} />}
+      {step === 1 && <ReviewInformationStep control={control} user={user} />}
+      {step === 2 && (
+        <NewAddressStep
           control={control}
-          label="My mailing address is the same as my residential address"
-          name="mailingSameAsResidential"
+          mailingSame={mailingSame}
+          onMailingSelected={fillAddress('mailingAddress')}
+          onResidentialSelected={fillAddress('residentialAddress')}
         />
-      </FormSection>
-      {!mailingSame && (
-        <AddressFields
-          control={control}
-          legend="New mailing address"
-          onAddressSelected={fillAddress('mailingAddress')}
-          prefix="mailingAddress"
+      )}
+      {step === 3 && <PartnersStep control={control} notifyIcbc={notifyIcbc} />}
+      {step === 4 && (
+        <ReviewSubmitStep
+          onEdit={(target) => void goTo(target, { blockOnFailure: false })}
+          user={user}
+          values={getValues()}
         />
       )}
 
-      <FormSection
-        description="Choose which services should be told about your new address."
-        title="Who needs to know?"
-      >
-        <div className="checkbox-group">
-          <CheckboxField control={control} label="BC Drivers License (ICBC)" name="notifyIcbc" />
-          <CheckboxField control={control} label="Medical Services Plan (MSP)" name="notifyMsp" />
-        </div>
-      </FormSection>
-
-      {submitError && (
+      {error && (
         <div className="form-alert" role="alert">
-          <AlertBanner variant="danger">{submitError}</AlertBanner>
+          <AlertBanner variant="danger">{error}</AlertBanner>
         </div>
       )}
 
       <div className="form-actions">
-        <Button isDisabled={formState.isSubmitting} type="submit">
-          Submit request
-        </Button>
-        {onCancel && (
-          <Button onPress={onCancel} variant="secondary">
+        {step > 0 && (
+          <Button
+            isDisabled={isSaving}
+            onPress={() => void goTo(step - 1, { blockOnFailure: false })}
+            variant="secondary"
+          >
+            Previous
+          </Button>
+        )}
+        {onCancel && step === 0 && (
+          <Button onPress={onCancel} variant="tertiary">
             Cancel
+          </Button>
+        )}
+        {step < LAST_STEP ? (
+          <Button
+            isDisabled={isSaving || !areFieldsValid(currentValues, fields[step])}
+            onPress={() => void next()}
+          >
+            Continue
+          </Button>
+        ) : (
+          <Button isDisabled={isSaving} type="submit">
+            Submit request
           </Button>
         )}
       </div>

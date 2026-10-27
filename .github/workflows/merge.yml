@@ -33,6 +33,8 @@ jobs:
     name: TEST Deploys (${{ needs.init.outputs.pr }})
     needs: [init]
     uses: ./.github/workflows/reusable-deploy.yml
+    permissions:
+      contents: read
     secrets:
       oc_token: ${{ secrets.oc_token }}
     with:
@@ -53,6 +55,8 @@ jobs:
     name: PROD Deploys (${{ needs.init.outputs.pr }})
     needs: [tests, init]
     uses: ./.github/workflows/reusable-deploy.yml
+    permissions:
+      contents: read
     secrets:
       oc_token: ${{ secrets.oc_token }}
     with:

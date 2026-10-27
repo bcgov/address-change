@@ -4,6 +4,7 @@ import { Button } from '@bcgov/design-system-react-components'
 import { useNavigate } from '@tanstack/react-router'
 import { getUserManager } from '@/auth/auth-service'
 import { useAuth } from '@/auth/auth-context'
+import LoadingPanel from '@/components/common/LoadingPanel'
 
 // The authorization code can only be exchanged once; share the promise across StrictMode re-runs.
 let callbackPromise: Promise<unknown> | undefined
@@ -26,7 +27,12 @@ const AuthCallback: FC = () => {
   }, [navigate])
 
   if (!error) {
-    return <p role="status">Signing you in…</p>
+    return (
+      <LoadingPanel
+        description="Please wait while we confirm your identity."
+        title="Signing you in…"
+      />
+    )
   }
 
   const cancelled = CANCELLED_ERRORS.includes(error)

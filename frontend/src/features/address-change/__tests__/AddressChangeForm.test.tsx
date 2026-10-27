@@ -1,11 +1,14 @@
 import { vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AuthContext, type AuthContextValue } from '@/auth/auth-context'
 import AddressChangeForm from '../AddressChangeForm'
-import { submitAddressChange } from '../api'
+import { saveAddressChangeDraft, submitAddressChange } from '../api'
 
-vi.mock('../api', () => ({ submitAddressChange: vi.fn() }))
+vi.mock('../api', () => ({
+  submitAddressChange: vi.fn(),
+  saveAddressChangeDraft: vi.fn(),
+}))
 
 const auth: AuthContextValue = {
   isLoading: false,
@@ -16,7 +19,7 @@ const auth: AuthContextValue = {
     firstName: 'Jane',
     lastName: 'Doe',
     email: 'jane@example.com',
-    birthdate: '',
+    birthdate: '1983-10-16',
     currentAddress: {
       addressLineOne: '9 Old Rd',
       addressLineTwo: '',
@@ -31,81 +34,159 @@ const auth: AuthContextValue = {
   getAccessToken: async () => 'token',
 }
 
-const renderForm = (onSubmitted = vi.fn()) =>
+const renderForm = (props = {}) =>
   render(
     <AuthContext value={auth}>
-      <AddressChangeForm onSubmitted={onSubmitted} />
+      <AddressChangeForm {...props} />
     </AuthContext>,
   )
 
-describe('AddressChangeForm', () => {
-  beforeEach(() => vi.mocked(submitAddressChange).mockReset())
+const click = (name: string) => userEvent.click(screen.getByRole('button', { name }))
 
-  test('shows the display name and current address from the token', () => {
-    renderForm()
-    expect(screen.getByText('Jane Doe')).toBeInTheDocument()
-    expect(screen.getByText(/9 Old Rd, Sooke, BC, V9Z 0A1, Canada/)).toBeInTheDocument()
+describe('AddressChangeForm step flow', () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn()
+    vi.mocked(submitAddressChange).mockReset()
+    vi.mocked(saveAddressChangeDraft).mockReset().mockResolvedValue({ requestId: 'draft-1' })
   })
 
-  test('formats and validates the postal code as the user types', async () => {
+  test('continue stays disabled until the collection notice is acknowledged', async () => {
     renderForm()
-    const input = screen.getAllByLabelText(/Postal code/)[0]
-
-    await userEvent.type(input, 'v8v1')
-    expect(input).toHaveValue('V8V 1')
-    expect(await screen.findByText('Enter a valid postal code, like V8V 1A1')).toBeInTheDocument()
-
-    await userEvent.type(input, 'a1')
-    expect(input).toHaveValue('V8V 1A1')
-    await waitFor(() =>
-      expect(screen.queryByText('Enter a valid postal code, like V8V 1A1')).not.toBeInTheDocument(),
-    )
+    expect(screen.getByRole('region', { name: 'Collection notice' })).toBeInTheDocument()
+    const next = screen.getByRole('button', { name: 'Continue' })
+    expect(next).toBeDisabled()
+    await userEvent.click(screen.getByLabelText(/acknowledge the collection notice/))
+    expect(next).toBeEnabled()
   })
 
-  test('shows validation errors and does not submit an empty form', async () => {
-    renderForm()
-    await userEvent.click(screen.getByRole('button', { name: 'Submit request' }))
-    expect(await screen.findAllByText('Enter address line 1')).not.toHaveLength(0)
-    expect(submitAddressChange).not.toHaveBeenCalled()
+  test('completed steps in the progress bar navigate back', async () => {
+    renderForm({ initialDraft: { idempotencyKey: 'k', step: 2, values: {} } })
+    expect(screen.queryByRole('button', { name: /Who needs to know/ })).not.toBeInTheDocument()
+    await click('Collection notice')
+    expect(await screen.findByRole('region', { name: 'Collection notice' })).toBeInTheDocument()
   })
 
-  test('uses the birthdate from the token instead of asking for it', async () => {
-    vi.mocked(submitAddressChange).mockResolvedValue({ requestId: 'req-2' })
-    const onSubmitted = vi.fn()
-    render(
-      <AuthContext value={{ ...auth, user: { ...auth.user!, birthdate: '1983-10-16' } }}>
-        <AddressChangeForm onSubmitted={onSubmitted} />
-      </AuthContext>,
-    )
-    expect(screen.queryByLabelText(/Date of birth/)).not.toBeInTheDocument()
+  test('shows the review step with name, birthdate, email and address and saves a draft', async () => {
+    renderForm()
+    await userEvent.click(screen.getByLabelText(/acknowledge the collection notice/))
+    await click('Continue')
+
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+    expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 0 })
     expect(screen.getByText('1983-10-16')).toBeInTheDocument()
+    expect(screen.getByText('jane@example.com')).toBeInTheDocument()
+    expect(screen.getByText(/9 Old Rd, Sooke, BC, V9Z 0A1, Canada/)).toBeInTheDocument()
+    expect(saveAddressChangeDraft).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ step: 1 }),
+    )
 
-    await userEvent.type(screen.getByLabelText(/Address line 1/), '1 Main St')
-    await userEvent.type(screen.getByLabelText(/City/), 'Victoria')
-    await userEvent.type(screen.getByLabelText(/Postal code/), 'V8V 1A1')
-    await userEvent.click(screen.getByRole('button', { name: 'Submit request' }))
-
-    await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith('req-2'))
-    expect(vi.mocked(submitAddressChange).mock.calls[0][0].person.dateOfBirth).toBe('1983-10-16')
+    await click('Previous')
+    expect(await screen.findByRole('region', { name: 'Collection notice' })).toBeInTheDocument()
   })
 
-  test('submits a valid form once and reports the request id', async () => {
+  test('disables continue on the address step until required fields are filled', async () => {
+    renderForm({ initialDraft: { idempotencyKey: 'k', step: 2, values: {} } })
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+    expect(screen.queryByText('Who needs to know?', { selector: 'h3' })).not.toBeInTheDocument()
+  })
+
+  test('requires the mailing address when it differs from the residential address', async () => {
+    renderForm({
+      initialDraft: {
+        idempotencyKey: 'k',
+        step: 2,
+        values: {
+          residentialAddress: {
+            addressLineOne: '1 Main St',
+            locality: 'Victoria',
+            postalCode: 'V8V 1A1',
+          },
+        },
+      },
+    })
+    const next = screen.getByRole('button', { name: 'Continue' })
+    await waitFor(() => expect(next).toBeEnabled())
+
+    await userEvent.click(screen.getByLabelText(/mailing address is the same/))
+    await waitFor(() => expect(next).toBeDisabled())
+
+    const mailing = within(screen.getByRole('group', { name: 'New mailing address' }))
+    await userEvent.type(mailing.getByLabelText(/Address line 1/), '2 Side St')
+    await userEvent.type(mailing.getByLabelText(/City/), 'Sooke')
+    await userEvent.type(mailing.getByLabelText(/Postal code/), 'V9Z 0A1')
+    await waitFor(() => expect(next).toBeEnabled())
+  })
+
+  test('walks through every step, then submits and shows the request id', async () => {
     vi.mocked(submitAddressChange).mockResolvedValue({ requestId: 'req-1' })
     const onSubmitted = vi.fn()
-    renderForm(onSubmitted)
+    renderForm({ onSubmitted })
 
-    await userEvent.type(screen.getByLabelText(/Date of birth/), '1990-01-02')
-    await userEvent.type(screen.getByLabelText(/Address line 1/), '1 Main St')
+    await userEvent.click(screen.getByLabelText(/acknowledge the collection notice/))
+    await click('Continue')
+    await click('Continue')
+
+    await userEvent.type(await screen.findByLabelText(/Address line 1/), '1 Main St')
     await userEvent.type(screen.getByLabelText(/City/), 'Victoria')
     await userEvent.type(screen.getByLabelText(/Postal code/), 'V8V 1A1')
-    await userEvent.click(screen.getByRole('button', { name: 'Submit request' }))
+    expect(screen.queryByLabelText(/Province/)).not.toBeInTheDocument()
+    expect(screen.getAllByText('British Columbia, Canada').length).toBeGreaterThan(0)
+    await click('Continue')
 
-    await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith('req-1'))
-    expect(submitAddressChange).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(submitAddressChange).mock.calls[0][0]).toMatchObject({
-      oldAddress: { addressLineOne: '9 Old Rd' },
-      newAddress: { addressLineOne: '1 Main St', locality: 'Victoria' },
-      isBillingAddressSame: true,
+    expect(await screen.findByRole('checkbox', { name: /BC Services Card/ })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /BC Services Card/ })).toBeChecked()
+    expect(screen.queryByText(/Medical Services Plan/)).not.toBeInTheDocument()
+    expect(screen.getByText("Usually your mother's maiden name.")).toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/Driver’s licence number/), '12-34x567')
+    expect(screen.getByLabelText(/Driver’s licence number/)).toHaveValue('1234567')
+    await userEvent.type(screen.getByLabelText(/Height/), '1a7.5cm')
+    expect(screen.getByLabelText(/Height/)).toHaveValue('175')
+    await userEvent.type(screen.getByLabelText(/Weight/), '70')
+    await userEvent.type(screen.getByLabelText(/Security keyword/), 'Smith')
+    await click('Continue')
+
+    expect(await screen.findByText('1 Main St, Victoria, BC, V8V 1A1, Canada')).toBeInTheDocument()
+    await click('Submit request')
+
+    expect(await screen.findByText('req-1')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Return to home' })).toBeInTheDocument()
+    expect(onSubmitted).toHaveBeenCalledWith('req-1')
+    const body = vi.mocked(submitAddressChange).mock.calls[0][0]
+    expect(body.notificationIntent).toEqual({
+      notifyBcsc: true,
+      notifyIcbc: true,
+      notifyMsp: false,
     })
+    expect(body.person).toMatchObject({ driversLicenseNumber: '1234567', heightCm: 175 })
+    expect(body.newAddress).toMatchObject({ addressLineOne: '1 Main St', region: 'BC' })
+  })
+
+  test('security keyword is masked until shown', async () => {
+    renderForm({ initialDraft: { idempotencyKey: 'k', step: 3, values: {} } })
+    const keyword = await screen.findByLabelText(/Security keyword/)
+    expect(keyword).toHaveAttribute('type', 'password')
+    await userEvent.click(screen.getByRole('button', { name: 'Show security keyword' }))
+    expect(screen.getByLabelText(/Security keyword/)).toHaveAttribute('type', 'text')
+    expect(screen.getByRole('button', { name: 'Hide security keyword' })).toBeInTheDocument()
+  })
+
+  test('hides ICBC requirements when ICBC is unchecked', async () => {
+    renderForm({ initialDraft: { idempotencyKey: 'k', step: 3, values: {} } })
+    expect(await screen.findByLabelText(/Security keyword/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: /ICBC/ }))
+    await waitFor(() => expect(screen.queryByLabelText(/Security keyword/)).not.toBeInTheDocument())
+  })
+
+  test('shows an error and stays on the step if saving progress fails', async () => {
+    vi.mocked(saveAddressChangeDraft).mockRejectedValue(new Error('down'))
+    renderForm()
+    await userEvent.click(screen.getByLabelText(/acknowledge the collection notice/))
+    await click('Continue')
+    expect(await screen.findByText(/could not save your progress/)).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Collection notice' })).toBeInTheDocument()
   })
 })
