@@ -8,7 +8,10 @@ import { logHttpCompletion } from './http-completion'
  *
  * Supports GET (the default), POST, PUT, PATCH, DELETE, and other HTTP methods
  * through RequestInit. Supply headers and a serialized body as with native fetch.
- * Redirects are deliberately returned to the caller rather than followed.
+ * Redirects default to manual handling. Set init.redirect to 'follow' or 'error'
+ * to override this; an input Request's redirect policy is also preserved.
+ * When following redirects, the completion event describes the original URL
+ * and final response status, rather than logging each redirect hop separately.
  *
  * During an incoming request, automatically forwards Correlation-Id and, when
  * available, X-Client-Id from the current request context. Calls outside a request
@@ -48,7 +51,11 @@ export async function loggedFetch(
   const start = process.hrtime.bigint()
   let status: number | undefined
   try {
-    const response = await fetch(input, { ...init, headers, redirect: 'manual' })
+    const response = await fetch(input, {
+      ...init,
+      headers,
+      redirect: init?.redirect ?? (input instanceof Request ? input.redirect : 'manual'),
+    })
     status = response.status
     return response
   } finally {

@@ -62,6 +62,29 @@ describe('ECS HTTP logging', () => {
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret|private/)
   })
 
+  it.each([
+    ['default', 'https://example.test/path', undefined, 'manual'],
+    ['explicit follow', 'https://example.test/path', { redirect: 'follow' }, 'follow'],
+    ['explicit error', 'https://example.test/path', { redirect: 'error' }, 'error'],
+    [
+      'Request policy',
+      new Request('https://example.test/path', { redirect: 'error' }),
+      undefined,
+      'error',
+    ],
+    [
+      'init overrides Request',
+      new Request('https://example.test/path', { redirect: 'error' }),
+      { redirect: 'follow' },
+      'follow',
+    ],
+  ] as const)('preserves redirect behavior: %s', async (_name, input, init, expected) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}'))
+    vi.spyOn(Logger.prototype, 'log').mockImplementation(() => {})
+    await loggedFetch(input, init)
+    expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe(expected)
+  })
+
   it('logs failed outgoing calls without leaking the exception', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('private'))
     const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => {})
