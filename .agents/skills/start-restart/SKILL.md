@@ -24,7 +24,8 @@ Run from the repository root. Never read `.env` files and never install tools au
 
 ## Launch
 
-- Prepare the database like the "Prepare local database" task: `docker compose up --detach database`, then `docker compose run --rm migrations`.
+- Before first launch and after schema changes, explicitly run the "Prepare local database" task: `docker compose up --detach database`, then `docker compose run --rm migrations`. "Debug full stack" does not run this task automatically.
+- For normal debugger restarts, reuse the running database and do not rerun migrations. If the database is stopped, run "Start local database" first.
 - Start backend (`npm run start:dev` in `backend/`, port 3001) and frontend (`npm run dev` in `frontend/`, port 3000) with the `env` values in `.vscode/launch.json`, as long-running background processes. Debugger attachment is a VS Code action; tell the user to press F5 on "Debug full stack" if they want breakpoints.
 - Restart: stop only the processes you started, then start them again.
 
