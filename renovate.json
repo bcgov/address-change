@@ -3,5 +3,13 @@
   "description": "Presets from https://github.com/bcgov/renovate-config",
   "extends": [
     "github>bcgov/renovate-config#2026.9.26"
+  ],
+  "packageRules": [
+    {
+      "description": "Astro and Starlight have coupled peer ranges; update together",
+      "matchFileNames": ["docs/package.json"],
+      "matchPackageNames": ["astro", "@astrojs/*", "starlight-openapi"],
+      "groupName": "astro docs"
+    }
   ]
 }
