@@ -4,9 +4,9 @@
     "node": ">=22.19.0"
   },
   "scripts": {
-    "predev": "node scripts/spec-dates.mjs",
+    "predev": "node scripts/prod-placeholder.mjs && node scripts/spec-dates.mjs",
     "dev": "astro dev",
-    "prebuild": "node scripts/spec-dates.mjs",
+    "prebuild": "node scripts/prod-placeholder.mjs && node scripts/spec-dates.mjs",
     "build": "astro build",
     "preview": "astro preview"
   },

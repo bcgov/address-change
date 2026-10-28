@@ -108,6 +108,7 @@ export function buildOpenApiDocument(options: OpenApiOptions = {}): OpenAPIObjec
         operation.operationId = meta.operationId
         operation.tags = ['Address Change']
 
+        if (operation.requestBody) operation.requestBody.required = true
         const body = operation.requestBody?.content?.['application/json']
         if (body && meta.requestExample) {
           body.schema.example = meta.requestExample

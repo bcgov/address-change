@@ -62,9 +62,11 @@ export class AddressChangeController {
       'requestId',
       new ParseUUIDPipe({
         exceptionFactory: () =>
-          badRequestProblem('Invalid request identifier', [
-            { path: ['requestId'], code: 'invalid_string' },
-          ]),
+          badRequestProblem(
+            'Invalid request identifier',
+            [{ path: ['requestId'], code: 'invalid_string' }],
+            'path',
+          ),
       }),
     )
     requestId: string,

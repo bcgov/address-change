@@ -6,6 +6,10 @@ if git diff --cached --name-only | grep -qE '^backend/src/'; then
     echo "pre-commit: backend/node_modules missing, skipping OpenAPI regeneration (run npm install in backend/; the PR check will catch a stale spec)"
     exit 0
   fi
+  if ! git diff --quiet -- backend/src; then
+    echo "pre-commit: unstaged changes in backend/src would leak into the generated spec; stage or stash them first"
+    exit 1
+  fi
   echo "pre-commit: regenerating OpenAPI spec"
   (cd backend && npm run openapi --silent) || exit 1
   git add docs/public/openapi/test.json

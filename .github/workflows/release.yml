@@ -100,6 +100,8 @@ jobs:
     name: Publish Docs
     needs: [openapi]
     uses: ./.github/workflows/docs.yml
+    with:
+      tag: ${{ github.event.release.tag_name }}
     permissions:
       contents: read
       pages: write
