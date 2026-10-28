@@ -6,9 +6,8 @@ import {
   addressChangeContract,
 } from './address-change/address-change.contract'
 import type { OpenApiRouteMetadata } from './address-change/address-change.contract'
-
-// Name of the OpenAPI security scheme referenced by each operation.
-const OAUTH2_SCHEME = 'oauth2'
+import { DEFAULT_ISSUERS, DEFAULT_SCOPE, applyOAuth2 } from './openapi.oauth2'
+import type { OpenApiEnvironment } from './openapi.oauth2'
 
 const responseDescriptions: Record<string, string> = {
   200: 'The request completed successfully.',
@@ -51,7 +50,7 @@ const errorExamples: Record<string, object> = {
   503: { statusCode: 503, message: 'Request could not be saved', error: 'Service Unavailable' },
 }
 
-export type OpenApiEnvironment = 'test' | 'prod'
+export type { OpenApiEnvironment }
 
 export interface OpenApiOptions {
   environment?: OpenApiEnvironment
@@ -63,10 +62,6 @@ export interface OpenApiOptions {
   serverUrl?: string
 }
 
-const DEFAULT_ISSUERS: Record<OpenApiEnvironment, string> = {
-  test: 'https://test.loginproxy.gov.bc.ca/auth/realms/standard',
-  prod: 'https://loginproxy.gov.bc.ca/auth/realms/standard',
-}
 /** Public base URL of each deployed environment, listed as the spec's server. */
 export const OPENAPI_SERVER_URLS: Record<OpenApiEnvironment, string> = {
   test: 'https://address-change-test.apps.gold.devops.gov.bc.ca',
@@ -80,7 +75,7 @@ const ENVIRONMENT_LABELS: Record<OpenApiEnvironment, string> = { test: 'Test', p
 export function buildOpenApiDocument(options: OpenApiOptions = {}): OpenAPIObject {
   const environment = options.environment ?? 'test'
   const issuer = options.issuer || DEFAULT_ISSUERS[environment]
-  const scope = options.scope || 'address-change-bc-6667'
+  const scope = options.scope || DEFAULT_SCOPE
 
   const document = generateOpenApi(
     addressChangeContract,
@@ -122,27 +117,11 @@ export function buildOpenApiDocument(options: OpenApiOptions = {}): OpenAPIObjec
     },
   )
 
-  document.components = {
-    ...document.components,
-    securitySchemes: {
-      [OAUTH2_SCHEME]: {
-        type: 'oauth2',
-        description: 'OAuth 2.0 authorization code flow against the BC government SSO.',
-        flows: {
-          authorizationCode: {
-            authorizationUrl: `${issuer}/protocol/openid-connect/auth`,
-            tokenUrl: `${issuer}/protocol/openid-connect/token`,
-            scopes: { [scope]: 'Submit and manage address change requests' },
-          },
-        },
-      },
-    },
-  }
+  applyOAuth2(document, issuer, scope)
 
   for (const pathItem of Object.values(document.paths)) {
     for (const operation of Object.values(pathItem) as Array<Record<string, any>>) {
       if (typeof operation !== 'object' || !operation.operationId) continue
-      operation.security = [{ [OAUTH2_SCHEME]: [scope] }]
 
       for (const parameter of operation.parameters ?? []) {
         if (parameter.name === 'requestId') {
