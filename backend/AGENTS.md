@@ -5,3 +5,4 @@
 - Database schema is `address_change`; schema changes go in `migrations/sql/` (see `migrations/AGENTS.md`), not ad hoc.
 - Generated Prisma output (`backend/generated/`) is ignored; do not commit it.
 - Deployment template: `openshift.deploy.yml`.
+- API endpoints are defined in the ts-rest contract, which also generates the OpenAPI spec; see the OpenAPI rule in [.agents/RULES.md](../.agents/RULES.md).

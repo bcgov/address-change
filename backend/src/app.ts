@@ -1,11 +1,13 @@
 import { NestFactory } from '@nestjs/core'
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+import { SwaggerModule } from '@nestjs/swagger'
+import type { OpenAPIObject } from '@nestjs/swagger'
 import { AppModule } from './app.module'
 import { customLogger } from './common/logger.config'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import helmet from 'helmet'
 import { VersioningType } from '@nestjs/common'
 import { metricsMiddleware } from './middleware/prom'
+import { buildOpenApiDocument } from './openapi.config'
 
 /**
  *
@@ -24,13 +26,13 @@ export async function bootstrap() {
     type: VersioningType.URI,
     prefix: 'v',
   })
-  const config = new DocumentBuilder()
-    .setTitle('Address Change API')
-    .setDescription('Address change application API')
-    .setVersion('1.0')
-    .build()
-
-  const document = SwaggerModule.createDocument(app, config)
-  SwaggerModule.setup('/api/docs', app, document)
+  SwaggerModule.setup(
+    '/api/docs',
+    app,
+    buildOpenApiDocument({
+      issuer: process.env.OIDC_ISSUER,
+      scope: process.env.OIDC_SUBMISSION_SCOPE,
+    }) as unknown as OpenAPIObject,
+  )
   return app
 }

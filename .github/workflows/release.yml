@@ -62,6 +62,49 @@ jobs:
       target: prod
       tag: ${{ needs.init.outputs.pr }}
 
+  # Prod OpenAPI spec uses the PROD environment's OIDC settings; attached to the release, then docs are republished
+  openapi:
+    name: Publish Prod OpenAPI Spec
+    needs: [init]
+    runs-on: ubuntu-24.04
+    environment: prod
+    permissions:
+      contents: write
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-update-notifier
+      - run: npm run build
+      - name: Generate spec
+        env:
+          OIDC_ISSUER: ${{ vars.OIDC_ISSUER }}
+          OIDC_SUBMISSION_SCOPE: ${{ vars.OIDC_SUBMISSION_SCOPE }}
+          RELEASE: ${{ github.event.release.tag_name }}
+        run: |
+          OPENAPI_VERSION="${RELEASE#v}" npm run openapi:release -- prod "${RUNNER_TEMP}/openapi-prod.json"
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "${TAG}" "${RUNNER_TEMP}/openapi-prod.json" --clobber
+
+  docs:
+    name: Publish Docs
+    needs: [openapi]
+    uses: ./.github/workflows/docs.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
   # Same as merge.yml's monitor-prod; no-ops if SYSDIG_API_TOKEN is unset
   monitor-prod:
     name: Sysdig Monitor (PROD)

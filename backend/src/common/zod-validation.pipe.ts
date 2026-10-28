@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import type { PipeTransform } from '@nestjs/common'
 import { z } from 'zod'
+import { badRequestProblem } from './problem-details'
 
 @Injectable()
 export class ZodValidationPipe<TSchema extends z.ZodTypeAny>
@@ -11,7 +12,7 @@ export class ZodValidationPipe<TSchema extends z.ZodTypeAny>
   transform(value: unknown): z.infer<TSchema> {
     const result = this.schema.safeParse(value)
     if (!result.success) {
-      throw new BadRequestException('Invalid request body')
+      throw badRequestProblem('Invalid request body', result.error.issues)
     }
     return result.data
   }

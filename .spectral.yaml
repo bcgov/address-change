@@ -1,0 +1,5 @@
+# BC Government API governance. SDX rules are used as published, without overrides.
+# https://github.com/bcgov/itk-api-governance/tree/main/dist/spectral
+extends:
+  - https://raw.githubusercontent.com/bcgov/itk-api-governance/main/dist/spectral/strict-ruleset.yaml
+  - https://raw.githubusercontent.com/bcgov/itk-api-governance/main/dist/spectral/sdx-ruleset.yaml

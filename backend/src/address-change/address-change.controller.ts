@@ -20,6 +20,7 @@ import type {
   AddressChangeRequest,
   AddressChangeSummary,
 } from './address-change.contract'
+import { badRequestProblem } from '../common/problem-details'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { AddressChangeService } from './address-change.service'
 import { AccessTokenGuard } from '../auth/access-token.guard'
@@ -57,7 +58,16 @@ export class AddressChangeController {
   @Header('Vary', 'Authorization')
   @HttpCode(HttpStatus.OK)
   getDraft(
-    @Param('requestId', new ParseUUIDPipe()) requestId: string,
+    @Param(
+      'requestId',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          badRequestProblem('Invalid request identifier', [
+            { path: ['requestId'], code: 'invalid_string' },
+          ]),
+      }),
+    )
+    requestId: string,
     @Req() request: AuthenticatedRequest,
   ): Promise<AddressChangeDraftResponse> {
     return this.service.getDraft(requestId, request.ownerSub)

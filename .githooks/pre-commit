@@ -1,0 +1,12 @@
+#!/bin/sh
+# Regenerate docs/public/openapi/test.json when backend sources change and stage the result.
+# Enabled by `npm install` in backend/ (sets core.hooksPath); bypass with --no-verify.
+if git diff --cached --name-only | grep -qE '^backend/src/'; then
+  if [ ! -d backend/node_modules ]; then
+    echo "pre-commit: backend/node_modules missing, skipping OpenAPI regeneration (run npm install in backend/; the PR check will catch a stale spec)"
+    exit 0
+  fi
+  echo "pre-commit: regenerating OpenAPI spec"
+  (cd backend && npm run openapi --silent) || exit 1
+  git add docs/public/openapi/test.json
+fi

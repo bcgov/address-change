@@ -1,0 +1,1326 @@
+{
+  "openapi": "3.0.2",
+  "paths": {
+    "/api/v1/address-change": {
+      "get": {
+        "description": "Returns the address-change requests owned by the authenticated resident, including the delivery status of each partner operation.",
+        "summary": "List address-change requests",
+        "tags": [
+          "Address Change"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "requestId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "effectiveDate": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "submittedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "operations": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "partnerCode": {
+                              "type": "string"
+                            },
+                            "deliveryMode": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "partnerCode",
+                            "deliveryMode",
+                            "status"
+                          ],
+                          "additionalProperties": false
+                        }
+                      }
+                    },
+                    "required": [
+                      "requestId",
+                      "status",
+                      "effectiveDate",
+                      "createdAt",
+                      "submittedAt",
+                      "updatedAt",
+                      "operations"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "example": [
+                    {
+                      "requestId": "7c825573-3df5-4e63-b376-ef7a4057369d",
+                      "status": "SUBMITTED",
+                      "effectiveDate": "2026-02-01",
+                      "createdAt": "2026-01-15T17:30:00.000Z",
+                      "submittedAt": "2026-01-15T17:30:00.000Z",
+                      "updatedAt": "2026-01-15T17:30:00.000Z",
+                      "operations": [
+                        {
+                          "partnerCode": "ICBC",
+                          "deliveryMode": "API",
+                          "status": "DELIVERED"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid bearer access token is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 401,
+                    "message": "A bearer access token is required",
+                    "error": "Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The access token does not include the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Missing address-change submission permission",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service or a downstream partner is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 503,
+                    "message": "Request could not be saved",
+                    "error": "Service Unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "listAddressChangeRequests",
+        "security": [
+          {
+            "oauth2": [
+              "address-change-bc-6667"
+            ]
+          }
+        ]
+      },
+      "post": {
+        "description": "Accepts an address-change request for asynchronous delivery to the selected partners and returns a request identifier. Repeating a submission with the same idempotency key returns the original result.",
+        "summary": "Submit an address-change request",
+        "tags": [
+          "Address Change"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "description": "The address-change payload.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "effectiveDate": {
+                    "type": "string"
+                  },
+                  "isBillingAddressSame": {
+                    "type": "boolean"
+                  },
+                  "person": {
+                    "type": "object",
+                    "properties": {
+                      "firstName": {
+                        "type": "string"
+                      },
+                      "firstMiddleInitial": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "secondMiddleInitial": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "lastName": {
+                        "type": "string"
+                      },
+                      "dateOfBirth": {
+                        "type": "string"
+                      },
+                      "emailAddress": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "daytimePhone": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "driversLicenseNumber": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "heightCm": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "nullable": true
+                      },
+                      "weightKg": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "exclusiveMinimum": true,
+                        "nullable": true
+                      },
+                      "securityKeyword": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "phn": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "firstName",
+                      "lastName",
+                      "dateOfBirth"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "oldAddress": {
+                    "type": "object",
+                    "properties": {
+                      "country": {
+                        "type": "string"
+                      },
+                      "addressLineOne": {
+                        "type": "string"
+                      },
+                      "addressLineTwo": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "locality": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      },
+                      "postalCode": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "country",
+                      "addressLineOne",
+                      "locality",
+                      "region",
+                      "postalCode"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "newAddress": {
+                    "type": "object",
+                    "properties": {
+                      "country": {
+                        "type": "string"
+                      },
+                      "addressLineOne": {
+                        "type": "string"
+                      },
+                      "addressLineTwo": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "locality": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      },
+                      "postalCode": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "country",
+                      "addressLineOne",
+                      "locality",
+                      "region",
+                      "postalCode"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "mailingAddress": {
+                    "type": "object",
+                    "properties": {
+                      "country": {
+                        "type": "string"
+                      },
+                      "addressLineOne": {
+                        "type": "string"
+                      },
+                      "addressLineTwo": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "locality": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      },
+                      "postalCode": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "country",
+                      "addressLineOne",
+                      "locality",
+                      "region",
+                      "postalCode"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "notificationIntent": {
+                    "type": "object",
+                    "properties": {
+                      "notifyIcbc": {
+                        "type": "boolean"
+                      },
+                      "notifyMsp": {
+                        "type": "boolean"
+                      },
+                      "notifyBcsc": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "notifyIcbc",
+                      "notifyMsp"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "idempotencyKey",
+                  "effectiveDate",
+                  "isBillingAddressSame",
+                  "person",
+                  "oldAddress",
+                  "newAddress",
+                  "notificationIntent"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "idempotencyKey": "submit-7f3a",
+                  "effectiveDate": "2026-02-01",
+                  "isBillingAddressSame": true,
+                  "person": {
+                    "firstName": "Alex",
+                    "lastName": "Example",
+                    "dateOfBirth": "1990-04-12"
+                  },
+                  "oldAddress": {
+                    "country": "Canada",
+                    "addressLineOne": "1234 Example Street",
+                    "locality": "Victoria",
+                    "region": "BC",
+                    "postalCode": "V8W 1A1"
+                  },
+                  "newAddress": {
+                    "country": "Canada",
+                    "addressLineOne": "5678 Sample Avenue",
+                    "locality": "Victoria",
+                    "region": "BC",
+                    "postalCode": "V8W 1A1"
+                  },
+                  "notificationIntent": {
+                    "notifyIcbc": true,
+                    "notifyMsp": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "The request was accepted for processing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "example": {
+                    "requestId": "7c825573-3df5-4e63-b376-ef7a4057369d"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails validation. The body is an RFC 9457 problem details object; errors lists the invalid fields without echoing their values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "location": {
+                            "type": "string",
+                            "enum": [
+                              "body",
+                              "query",
+                              "header",
+                              "path",
+                              "cookie"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "code",
+                          "message",
+                          "location"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "errors"
+                  ],
+                  "example": {
+                    "type": "about:blank",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": "Invalid request body",
+                    "errors": [
+                      {
+                        "type": "validation",
+                        "code": "invalid_string",
+                        "message": "Invalid value at /person/dateOfBirth",
+                        "location": "body"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid bearer access token is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 401,
+                    "message": "A bearer access token is required",
+                    "error": "Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The access token does not include the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Missing address-change submission permission",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state of a resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 409,
+                    "message": "An address-change request is already active",
+                    "error": "Conflict"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service or a downstream partner is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 503,
+                    "message": "Request could not be saved",
+                    "error": "Service Unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "submitAddressChangeRequest",
+        "security": [
+          {
+            "oauth2": [
+              "address-change-bc-6667"
+            ]
+          }
+        ]
+      },
+      "summary": "Address-change requests"
+    },
+    "/api/v1/address-change/drafts/{requestId}": {
+      "get": {
+        "description": "Returns a draft address-change request owned by the authenticated resident. Drafts owned by other residents are reported as not found.",
+        "summary": "Get an address-change draft",
+        "tags": [
+          "Address Change"
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "7c825573-3df5-4e63-b376-ef7a4057369d"
+            },
+            "description": "Identifier of the address-change request, as returned on creation."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "idempotencyKey": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "DRAFT"
+                      ]
+                    },
+                    "draft": {
+                      "type": "object",
+                      "properties": {
+                        "step": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
+                        "values": {
+                          "type": "object",
+                          "additionalProperties": true
+                        }
+                      },
+                      "required": [
+                        "step",
+                        "values"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "requestId",
+                    "idempotencyKey",
+                    "status",
+                    "draft"
+                  ],
+                  "additionalProperties": false,
+                  "example": {
+                    "requestId": "7c825573-3df5-4e63-b376-ef7a4057369d",
+                    "idempotencyKey": "draft-7f3a",
+                    "status": "DRAFT",
+                    "draft": {
+                      "step": 2,
+                      "values": {
+                        "firstName": "Alex"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails validation. The body is an RFC 9457 problem details object; errors lists the invalid fields without echoing their values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "location": {
+                            "type": "string",
+                            "enum": [
+                              "body",
+                              "query",
+                              "header",
+                              "path",
+                              "cookie"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "code",
+                          "message",
+                          "location"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "errors"
+                  ],
+                  "example": {
+                    "type": "about:blank",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": "Invalid request body",
+                    "errors": [
+                      {
+                        "type": "validation",
+                        "code": "invalid_string",
+                        "message": "Invalid value at /person/dateOfBirth",
+                        "location": "body"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid bearer access token is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 401,
+                    "message": "A bearer access token is required",
+                    "error": "Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The access token does not include the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Missing address-change submission permission",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found for this resident.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Draft not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service or a downstream partner is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 503,
+                    "message": "Request could not be saved",
+                    "error": "Service Unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getAddressChangeDraft",
+        "security": [
+          {
+            "oauth2": [
+              "address-change-bc-6667"
+            ]
+          }
+        ]
+      },
+      "summary": "A single address-change draft"
+    },
+    "/api/v1/address-change/drafts": {
+      "put": {
+        "description": "Creates or updates the resident draft identified by the idempotency key. The draft content is opaque form state and is stored encrypted.",
+        "summary": "Save an address-change draft",
+        "tags": [
+          "Address Change"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "description": "The address-change payload.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "draft": {
+                    "type": "object",
+                    "properties": {
+                      "step": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 10
+                      },
+                      "values": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "values"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "idempotencyKey",
+                  "draft"
+                ],
+                "additionalProperties": false,
+                "example": {
+                  "idempotencyKey": "draft-7f3a",
+                  "draft": {
+                    "step": 2,
+                    "values": {
+                      "firstName": "Alex"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "requestId"
+                  ],
+                  "additionalProperties": false,
+                  "example": {
+                    "requestId": "7c825573-3df5-4e63-b376-ef7a4057369d"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is malformed or fails validation. The body is an RFC 9457 problem details object; errors lists the invalid fields without echoing their values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "location": {
+                            "type": "string",
+                            "enum": [
+                              "body",
+                              "query",
+                              "header",
+                              "path",
+                              "cookie"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "code",
+                          "message",
+                          "location"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "errors"
+                  ],
+                  "example": {
+                    "type": "about:blank",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": "Invalid request body",
+                    "errors": [
+                      {
+                        "type": "validation",
+                        "code": "invalid_string",
+                        "message": "Invalid value at /person/dateOfBirth",
+                        "location": "body"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid bearer access token is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 401,
+                    "message": "A bearer access token is required",
+                    "error": "Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The access token does not include the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Missing address-change submission permission",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request conflicts with the current state of a resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 409,
+                    "message": "An address-change request is already active",
+                    "error": "Conflict"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service or a downstream partner is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 503,
+                    "message": "Request could not be saved",
+                    "error": "Service Unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "saveAddressChangeDraft",
+        "security": [
+          {
+            "oauth2": [
+              "address-change-bc-6667"
+            ]
+          }
+        ]
+      },
+      "summary": "Address-change drafts"
+    }
+  },
+  "info": {
+    "title": "Address Change API",
+    "version": "0.0.0-test",
+    "description": "Lets an authenticated BC resident draft and submit an address change, and track its delivery to partner services such as ICBC and MSP. Requests are validated, stored, and delivered asynchronously. This is the Test environment contract.",
+    "termsOfService": "https://www2.gov.bc.ca/gov/content?id=D1EE0A405E584363B205CD4353E02C88",
+    "contact": {
+      "name": "Contact the Location Services team",
+      "url": "https://dpdd.atlassian.net/servicedesk/customer/portal/1/group/7/"
+    },
+    "license": {
+      "name": "Open Government License - British Columbia",
+      "url": "https://www2.gov.bc.ca/gov/content?id=A519A56BC2BF44E4A008B33FCF527F61"
+    }
+  },
+  "tags": [
+    {
+      "name": "Address Change",
+      "description": "Draft, submit, and track address changes."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 authorization code flow against the BC government SSO.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://test.loginproxy.gov.bc.ca/auth/realms/standard/protocol/openid-connect/auth",
+            "tokenUrl": "https://test.loginproxy.gov.bc.ca/auth/realms/standard/protocol/openid-connect/token",
+            "scopes": {
+              "address-change-bc-6667": "Submit and manage address change requests"
+            }
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://address-change-test.apps.gold.devops.gov.bc.ca",
+      "description": "Address Change API, Test environment"
+    }
+  ]
+}
