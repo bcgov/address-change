@@ -10,6 +10,16 @@ or stored workflow functions. It does not implement the service or saga itself.
 Once applied to a retained database, do not edit V1; use new versioned migrations.
 It is a fresh-install migration, not an upgrade of another experimental schema.
 
+`sql/V2__flat_file_delivery.sql` adds `flat_file_batch.file_content` (the exact
+generated file bytes) and per-partner SFTP settings on `partner_system`. SFTP
+passwords are AES-256-GCM envelopes encrypted by the application with the
+`SFTP_CREDENTIAL_ENCRYPTION_KEY` OpenShift secret; key-based auth stores only
+the path of a mounted key file.
+
+`seed/R__local_sample_data.sql` is local-only sample data. docker-compose adds
+the `seed/` location; the migrations image copies `sql/` alone, so the seed never
+reaches PR, TEST or PROD databases.
+
 ## Run and verify
 
 Use the Patroni primary/write endpoint and the project's migration role. Use the
@@ -138,8 +148,8 @@ duplicate-handling contract.
 
 There is one batch_id per operation. Replacing it loses prior membership;
 add a linking history before implementing reassignment/regeneration. Attempt
-rows track API calls, not file-transfer attempts. Store full files separately
-in protected storage.
+rows track API calls, not file-transfer attempts. Generated files are stored in
+`flat_file_batch.file_content` and contain personal information.
 
 ## Audits, personal information and Unicode
 
@@ -198,7 +208,7 @@ WHERE created_at < now() - interval '30 days';
 
 Request deletion cascades to person, address, operation and attempt rows.
 Idempotency history is limited to retained data. Separately remove generated
-file objects and unreferenced batch metadata under the retention policy;
+batches (including `file_content`) and unreferenced batch metadata under the retention policy;
 a file may contain requests of different ages. Define backup retention with
 the platform team. This migration installs no purge scheduler.
 
