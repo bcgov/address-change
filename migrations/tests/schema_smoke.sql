@@ -1,4 +1,4 @@
--- Run after V1 with psql -X -v ON_ERROR_STOP=1 -f this-file.sql.
+-- Run after all V*.sql migrations with psql -X -v ON_ERROR_STOP=1 -f this-file.sql.
 -- Structural schema checks only. Workflow/concurrency tests belong to the service.
 -- All test data is rolled back, including on failure when psql exits.
 BEGIN;
@@ -193,6 +193,18 @@ BEGIN
     OR EXISTS (SELECT 1 FROM address_change.processing_attempt WHERE operation_id = op) THEN
     RAISE EXCEPTION 'Request purge did not cascade';
   END IF;
+  BEGIN
+    UPDATE address_change.partner_system
+      SET sftp_auth_method = 'PASSWORD', sftp_encrypted_password = NULL WHERE partner_id = icbc;
+    RAISE EXCEPTION 'Allowed PASSWORD SFTP auth without an encrypted password';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE address_change.partner_system
+      SET sftp_auth_method = 'PRIVATE_KEY', sftp_key_path = NULL WHERE partner_id = icbc;
+    RAISE EXCEPTION 'Allowed PRIVATE_KEY SFTP auth without a key path';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   RAISE NOTICE 'Schema constraints, explicit updates and Unicode checks passed';
 END $$;
 ROLLBACK;

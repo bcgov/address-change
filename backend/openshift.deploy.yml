@@ -58,6 +58,9 @@ parameters:
   - name: DB_CLIENT
     description: Label used by the loc-tools Patroni ingress policy
     value: disposable
+  - name: SFTP_SECRET
+    description: Secret holding SFTP_CREDENTIAL_ENCRYPTION_KEY (base64, 32 bytes); created manually per namespace
+    value: address-change-sftp
   - name: OIDC_ISSUER
     description: OIDC issuer URL used to validate access tokens
     required: true
@@ -205,6 +208,12 @@ objects:
                   value: ${DB_SSLMODE}
                 - name: POSTGRES_SCHEMA
                   value: "address_change"
+                - name: SFTP_CREDENTIAL_ENCRYPTION_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${SFTP_SECRET}
+                      key: SFTP_CREDENTIAL_ENCRYPTION_KEY
+                      optional: true
                 - name: OIDC_ISSUER
                   value: ${OIDC_ISSUER}
                 - name: OIDC_AUDIENCE
