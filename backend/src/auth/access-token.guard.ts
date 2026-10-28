@@ -8,6 +8,7 @@ import type { CanActivate, ExecutionContext } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { Request } from 'express'
 import type { JWTVerifyGetKey } from 'jose'
+import { loggedFetch } from '../logging/logged-fetch'
 
 export interface AuthenticatedRequest extends Request {
   ownerSub: string
@@ -37,9 +38,12 @@ export class AccessTokenVerifier {
     }
 
     // Dynamic import also supports Node versions that cannot require an ESM-only library.
-    const { createRemoteJWKSet, jwtVerify } = await import('jose')
+    const { createRemoteJWKSet, jwtVerify, customFetch } = await import('jose')
     if (!this.keys || this.jwksUri !== jwksUri) {
-      this.keys = createRemoteJWKSet(new URL(jwksUri), { timeoutDuration: 5000 })
+      this.keys = createRemoteJWKSet(new URL(jwksUri), {
+        timeoutDuration: 5000,
+        [customFetch]: loggedFetch,
+      })
       this.jwksUri = jwksUri
     }
     let verified: Awaited<ReturnType<typeof jwtVerify>>

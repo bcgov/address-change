@@ -1,6 +1,5 @@
-import type { MiddlewareConsumer } from '@nestjs/common'
-import { Module, RequestMethod } from '@nestjs/common'
-import { HTTPLoggerMiddleware } from './middleware/req.res.logger'
+import { Module } from '@nestjs/common'
+import { LoggingModule } from './logging/logging.module'
 import { PrismaService } from './prisma.service'
 import { ConfigModule } from '@nestjs/config'
 import { AppService } from './app.service'
@@ -20,6 +19,7 @@ import { AccessTokenGuard, AccessTokenVerifier } from './auth/access-token.guard
       ignoreEnvFile: false,
     }),
     TerminusModule,
+    LoggingModule,
   ],
   controllers: [AppController, MetricsController, HealthController, AddressChangeController],
   providers: [
@@ -31,15 +31,4 @@ import { AccessTokenGuard, AccessTokenVerifier } from './auth/access-token.guard
     AccessTokenVerifier,
   ],
 })
-export class AppModule {
-  // let's add a middleware on all routes
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(HTTPLoggerMiddleware)
-      .exclude(
-        { path: 'metrics', method: RequestMethod.ALL },
-        { path: 'health', method: RequestMethod.ALL },
-      )
-      .forRoutes('*')
-  }
-}
+export class AppModule {}
