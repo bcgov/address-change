@@ -21,6 +21,7 @@
     },
     {
       "label": "Prepare local database",
+      "detail": "Run once before first debug launch and after schema changes. Normal debugger restarts do not run migrations.",
       "dependsOn": ["Run database migrations"],
       "dependsOrder": "sequence",
       "problemMatcher": []
