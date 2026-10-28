@@ -314,7 +314,12 @@ describe('AddressChange intake HTTP + SQL integration', () => {
     { ...validRequest, requestedDeliveries: ['ICBC'] },
   ])('rejects invalid/client-controlled fields without reflecting private values', async (body) => {
     const response = await submit(body).expect(400)
-    expect(response.body.message).toBe('Invalid request body')
+    expect(response.body).toMatchObject({
+      status: 400,
+      title: 'Bad Request',
+      detail: 'Invalid request body',
+    })
+    expect(Array.isArray(response.body.errors)).toBe(true)
     expect(JSON.stringify(response.body)).not.toMatch(
       /private-invalid-value|synthetic keyword|untrusted-user/,
     )
