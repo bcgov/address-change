@@ -48,6 +48,7 @@ jobs:
         with:
           file: common/openshift.init.yml
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           overwrite: true
@@ -61,6 +62,7 @@ jobs:
         uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           commands: |
@@ -110,6 +112,7 @@ jobs:
         with:
           file: common/openshift.database-init.yml
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           # Retain the password of an already initialized disposable database.
@@ -124,6 +127,7 @@ jobs:
         uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           commands: |
@@ -141,6 +145,7 @@ jobs:
         with:
           file: common/openshift.database.yml
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           parameters: -p DB_PVC_SIZE="256Mi"
@@ -151,6 +156,7 @@ jobs:
         uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           commands: |
@@ -202,6 +208,7 @@ jobs:
         with:
           file: ${{ matrix.file }}
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           debug: true
