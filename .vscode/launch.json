@@ -21,7 +21,11 @@
         "POSTGRES_DATABASE": "postgres",
         "POSTGRES_USER": "postgres",
         "POSTGRES_PASSWORD": "default",
-        "POSTGRES_SCHEMA": "address_change"
+        "POSTGRES_SCHEMA": "address_change",
+        "OIDC_ISSUER": "https://dev.loginproxy.gov.bc.ca/auth/realms/standard",
+        "OIDC_AUDIENCE": "address-change-bc-6667",
+        "OIDC_JWKS_URI": "https://dev.loginproxy.gov.bc.ca/auth/realms/standard/protocol/openid-connect/certs",
+        "OIDC_SUBMISSION_SCOPE": "address-change-bc-6667"
       }
     },
     {
@@ -33,7 +37,11 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "${workspaceFolder}/frontend",
       "console": "integratedTerminal",
-      "env": { "PORT": "3000", "BACKEND_URL": "http://localhost:3001" },
+      "env": {
+        "PORT": "3000",
+        "BACKEND_URL": "http://localhost:3001",
+        "VITE_OIDC_SCOPE": "openid profile email address-change-bc-6667"
+      },
       "serverReadyAction": {
         "pattern": "Local:\\s+(https?://\\S+)",
         "uriFormat": "%s",
