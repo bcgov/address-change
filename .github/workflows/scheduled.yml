@@ -46,7 +46,7 @@ jobs:
         uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
-          oc_login_attempts: 7
+          login_attempts: 7
           oc_token: ${{ secrets.oc_token }}
           oc_server: ${{ vars.oc_server }}
           commands: |
@@ -102,7 +102,7 @@ jobs:
     name: ZAP Scans
     permissions:
       issues: write
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: ZAP Scan
         uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c # v0.13.0
@@ -114,7 +114,7 @@ jobs:
 
   load-tests:
     name: Load
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         name: [backend, frontend]
