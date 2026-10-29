@@ -118,7 +118,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: bcgov/actions/sysdig-monitor@4026bfd276b8a5839029106099b13edfb594b2c3 # v0.8.0
+      - uses: bcgov/actions/sysdig-monitor@122a9b1c6c082b1b1f18c300020fbdc417b6b0b2 # v0.10.0
         with:
           sysdig_api_token: ${{ secrets.SYSDIG_API_TOKEN }}
           oc_namespace: ${{ vars.OC_NAMESPACE }}
