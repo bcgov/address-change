@@ -424,3 +424,10 @@ apm_modules/
 
 # Per-user agent preferences
 .agents/local/
+
+# Docs site
+docs/node_modules/
+docs/dist/
+docs/.astro/
+docs/public/openapi/prod.json
+docs/src/data/spec-dates.json

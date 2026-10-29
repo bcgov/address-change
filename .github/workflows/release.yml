@@ -23,7 +23,7 @@ jobs:
       pull-requests: read
     outputs:
       pr: ${{ steps.pr.outputs.pr }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       # PR number for the release's commit (a squash merge to main)
@@ -62,18 +62,63 @@ jobs:
       target: prod
       tag: ${{ needs.init.outputs.pr }}
 
+  # Prod OpenAPI spec uses the PROD environment's OIDC settings; attached to the release, then docs are republished
+  openapi:
+    name: Publish Prod OpenAPI Spec
+    needs: [init]
+    runs-on: ubuntu-26.04
+    environment: prod
+    permissions:
+      contents: write
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-update-notifier
+      - run: npm run build
+      - name: Generate spec
+        env:
+          OIDC_ISSUER: ${{ vars.OIDC_ISSUER }}
+          OIDC_SUBMISSION_SCOPE: ${{ vars.OIDC_SUBMISSION_SCOPE }}
+          RELEASE: ${{ github.event.release.tag_name }}
+        run: |
+          OPENAPI_VERSION="${RELEASE#v}" npm run openapi:release -- prod "${RUNNER_TEMP}/openapi-prod.json"
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "${TAG}" "${RUNNER_TEMP}/openapi-prod.json" --clobber
+
+  docs:
+    name: Publish Docs
+    needs: [openapi]
+    uses: ./.github/workflows/docs.yml
+    with:
+      tag: ${{ github.event.release.tag_name }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
   # Same as merge.yml's monitor-prod; no-ops if SYSDIG_API_TOKEN is unset
   monitor-prod:
     name: Sysdig Monitor (PROD)
     needs: [deploy-prod]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment: prod
     permissions:
       contents: read
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: bcgov/actions/sysdig-monitor@4026bfd276b8a5839029106099b13edfb594b2c3 # v0.8.0
+      - uses: bcgov/actions/sysdig-monitor@122a9b1c6c082b1b1f18c300020fbdc417b6b0b2 # v0.10.0
         with:
           sysdig_api_token: ${{ secrets.SYSDIG_API_TOKEN }}
           oc_namespace: ${{ vars.OC_NAMESPACE }}

@@ -1,0 +1,18 @@
+{
+  "private": true,
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "predev": "node scripts/prod-placeholder.mjs && node scripts/spec-dates.mjs",
+    "dev": "astro dev",
+    "prebuild": "node scripts/prod-placeholder.mjs && node scripts/spec-dates.mjs",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.3.3",
+    "starlight-openapi": "0.27.0"
+  }
+}
