@@ -41,7 +41,7 @@ jobs:
     environment: ${{ inputs.environment }}
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: bcgov/action-deployer-openshift@e2d60eb9cacceb89c3b97d8dcf0a2c460eea5eab # v4.2.3
         id: deploy
@@ -84,7 +84,7 @@ jobs:
     if: inputs.environment != 'test' && inputs.environment != 'prod'
     needs: [init]
     environment: ${{ inputs.environment }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -170,7 +170,7 @@ jobs:
     needs: [init, database]
     # The database job is intentionally skipped for Patroni environments.
     if: ${{ !cancelled() && needs.init.result == 'success' && (needs.database.result == 'success' || needs.database.result == 'skipped') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
       matrix:
