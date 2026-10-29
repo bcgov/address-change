@@ -3,7 +3,7 @@ x-var:
   - &POSTGRES_USER postgres
   - &POSTGRES_PASSWORD default
   - &POSTGRES_DATABASE postgres
-  - &node-image node:22
+  - &node-image node:22.23.4-bookworm
 
 # Reusable envars for postgres
 x-postgres-vars: &postgres-vars
