@@ -17,7 +17,7 @@ jobs:
       attestations: write
       id-token: write
       packages: write
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         package: [backend, frontend, migrations]
@@ -33,7 +33,7 @@ jobs:
             ${{ github.event.number }}
             ${{ github.event.pull_request.head.sha }}
           tag_fallback: latest
-          triggers: ('${{ matrix.package }}/', '.github/workflows/pr-open.yml')
+          triggers: ('${{ matrix.package }}/')
 
   deploys:
     name: Deploys (${{ github.event.number }})
@@ -47,7 +47,7 @@ jobs:
     with:
       target: ${{ github.event.number }}
       tag: ${{ github.event.pull_request.head.sha }}
-      triggers: ('backend/', 'frontend/', 'migrations/', 'common/', '.github/workflows/pr-open.yml', '.github/workflows/reusable-deploy.yml')
+      triggers: ('backend/', 'frontend/', 'migrations/', 'common/')
 
   tests:
     name: Tests
@@ -59,7 +59,7 @@ jobs:
     name: Deployment Links
     needs: [deploys]
     if: needs.deploys.outputs.triggered == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       pull-requests: write
     steps:
