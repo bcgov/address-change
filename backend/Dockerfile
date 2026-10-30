@@ -17,7 +17,7 @@ ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 RUN npm ci --ignore-scripts --no-update-notifier --omit=dev
 
 # Pin the patched runtime; the Distroless Node 24 image still ships an older Node.
-FROM node:24.22.1-bookworm-slim
+FROM node:26.12.0-bookworm-slim
 ENV NODE_ENV=production
 
 # Copy app and dependencies
