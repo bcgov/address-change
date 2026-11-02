@@ -61,7 +61,12 @@ export class FlatFileService {
   async generateForPartner(partner: PartnerSystem, now = new Date()): Promise<BatchResult> {
     const batchId = await this.prisma.$transaction((tx) => this.freezeBatch(tx, partner, now))
     if (!batchId) {
-      return { partnerCode: partner.partnerCode, batchId: null, status: 'SKIPPED', recordCount: 0 }
+      return {
+        partnerCode: partner.partnerCode,
+        batchId: null,
+        status: 'SKIPPED',
+        recordCount: 0,
+      }
     }
     try {
       const records = await this.loadRecords(batchId)
@@ -90,7 +95,11 @@ export class FlatFileService {
     } catch (err) {
       await this.prisma.flatFileBatch.update({
         where: { batchId },
-        data: { status: 'FAILED', updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR },
+        data: {
+          status: 'FAILED',
+          updatedAt: new Date(),
+          updatedBy: FLAT_FILE_ACTOR,
+        },
       })
       throw err
     }
@@ -130,7 +139,11 @@ export class FlatFileService {
     })
     await tx.processingOperation.updateMany({
       where: { operationId: { in: operations.map((o) => o.id) } },
-      data: { batchId: batch.batchId, updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
+      data: {
+        batchId: batch.batchId,
+        updatedAt: now,
+        updatedBy: FLAT_FILE_ACTOR,
+      },
     })
     await tx.flatFileBatch.update({
       where: { batchId: batch.batchId },
@@ -170,7 +183,11 @@ export class FlatFileService {
         })
       } catch (err) {
         this.logger.error(`Transfer of batch ${batchId} could not start: ${(err as Error).message}`)
-        results.push({ partnerCode: partner.partnerCode, batchId, status: 'FAILED' })
+        results.push({
+          partnerCode: partner.partnerCode,
+          batchId,
+          status: 'FAILED',
+        })
       }
     }
     return results
@@ -190,7 +207,11 @@ export class FlatFileService {
       }
       await tx.flatFileBatch.update({
         where: { batchId },
-        data: { status: 'TRANSFERRING', updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR },
+        data: {
+          status: 'TRANSFERRING',
+          updatedAt: new Date(),
+          updatedBy: FLAT_FILE_ACTOR,
+        },
       })
       return batch
     })
@@ -209,7 +230,11 @@ export class FlatFileService {
       this.logger.error(`Transfer of batch ${batchId} failed (${code}): ${(err as Error).message}`)
       await this.prisma.flatFileBatch.update({
         where: { batchId },
-        data: { status: 'FAILED', updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR },
+        data: {
+          status: 'FAILED',
+          updatedAt: new Date(),
+          updatedBy: FLAT_FILE_ACTOR,
+        },
       })
       return { status: 'FAILED' }
     }
@@ -232,7 +257,12 @@ export class FlatFileService {
 
     await tx.flatFileBatch.update({
       where: { batchId },
-      data: { status: 'SENT', transferredAt: now, updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
+      data: {
+        status: 'SENT',
+        transferredAt: now,
+        updatedAt: now,
+        updatedBy: FLAT_FILE_ACTOR,
+      },
     })
     await tx.processingOperation.updateMany({
       where: { batchId },

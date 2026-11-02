@@ -205,6 +205,15 @@ BEGIN
     RAISE EXCEPTION 'Allowed PRIVATE_KEY SFTP auth without a key path';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  BEGIN
+    UPDATE address_change.partner_system
+      SET sftp_host_key_fingerprints = 'not-a-fingerprint' WHERE partner_id = icbc;
+    RAISE EXCEPTION 'Allowed a malformed host key fingerprint';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  UPDATE address_change.partner_system
+    SET sftp_host_key_fingerprints = 'SHA256:' || repeat('A', 43) || ',SHA256:' || repeat('b', 43)
+    WHERE partner_id = icbc;
   RAISE NOTICE 'Schema constraints, explicit updates and Unicode checks passed';
 END $$;
 ROLLBACK;

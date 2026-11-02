@@ -73,13 +73,33 @@ function addressColumns(prefix: AddressPrefix): Column[] {
 
 // Single source of the file layout; add or remove entries here when form fields change.
 export const COLUMNS: readonly Column[] = [
-  { key: 'received_at', minWidth: 14, value: (r) => timestamp(r.request.receivedAt) },
-  { key: 'effective_date', minWidth: 8, value: (r) => dateOnly(r.request.effectiveDate) },
+  {
+    key: 'received_at',
+    minWidth: 14,
+    value: (r) => timestamp(r.request.receivedAt),
+  },
+  {
+    key: 'effective_date',
+    minWidth: 8,
+    value: (r) => dateOnly(r.request.effectiveDate),
+  },
   { key: 'last_name', value: (r) => r.person.lastName },
   { key: 'first_name', value: (r) => r.person.firstName },
-  { key: 'first_middle_initial', minWidth: 1, value: (r) => text(r.person.firstMiddleInitial) },
-  { key: 'second_middle_initial', minWidth: 1, value: (r) => text(r.person.secondMiddleInitial) },
-  { key: 'date_of_birth', minWidth: 8, value: (r) => dateOnly(r.person.dateOfBirth) },
+  {
+    key: 'first_middle_initial',
+    minWidth: 1,
+    value: (r) => text(r.person.firstMiddleInitial),
+  },
+  {
+    key: 'second_middle_initial',
+    minWidth: 1,
+    value: (r) => text(r.person.secondMiddleInitial),
+  },
+  {
+    key: 'date_of_birth',
+    minWidth: 8,
+    value: (r) => dateOnly(r.person.dateOfBirth),
+  },
   // Encrypted at rest and not yet decryptable; blank placeholders until key handling exists.
   { key: 'drivers_license_number', minWidth: 8, value: () => '' },
   { key: 'phn', minWidth: 10, value: () => '' },
