@@ -46,7 +46,10 @@ function setup(pendingRequestIds: string[], operations: ReturnType<typeof operat
       .mockResolvedValueOnce(pendingRequestIds.map((request_id) => ({ request_id })))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(operations.map((o) => ({ id: o.operationId }))),
-    flatFileBatch: { create: vi.fn().mockResolvedValue({ batchId: 'b-1' }), update: vi.fn() },
+    flatFileBatch: {
+      create: vi.fn().mockResolvedValue({ batchId: 'b-1' }),
+      update: vi.fn(),
+    },
     processingOperation: { updateMany: vi.fn() },
   }
   const prisma = {
@@ -87,11 +90,16 @@ describe('FlatFileService.generateForPartner', () => {
       fileName: 'ICBC.Address.20250516.191024.TXT',
     })
     expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { operationId: { in: ['o-1', 'o-2'] } } }),
+      expect.objectContaining({
+        where: { operationId: { in: ['o-1', 'o-2'] } },
+      }),
     )
     expect(tx.flatFileBatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'READY', updatedBy: FLAT_FILE_ACTOR }),
+        data: expect.objectContaining({
+          status: 'READY',
+          updatedBy: FLAT_FILE_ACTOR,
+        }),
       }),
     )
     const stored = prisma.flatFileBatch.update.mock.calls[0]?.[0].data
@@ -126,7 +134,10 @@ describe('FlatFileService transfer', () => {
     }
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ id: 'r-1' }]),
-      flatFileBatch: { findUniqueOrThrow: vi.fn().mockResolvedValue(batch), update: vi.fn() },
+      flatFileBatch: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue(batch),
+        update: vi.fn(),
+      },
       processingOperation: {
         updateMany: vi.fn(),
         findMany: vi.fn().mockResolvedValue([{ requestId: 'r-1', status: 'SUCCEEDED' }]),
@@ -152,12 +163,18 @@ describe('FlatFileService transfer', () => {
       vi.fn().mockRejectedValue(new SftpNotConfiguredError('not configured')),
     )
 
-    await expect(service.transferBatch('b-1')).resolves.toEqual({ status: 'FAILED' })
+    await expect(service.transferBatch('b-1')).resolves.toEqual({
+      status: 'FAILED',
+    })
     expect(tx.flatFileBatch.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'TRANSFERRING' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'TRANSFERRING' }),
+      }),
     )
     expect(prisma.flatFileBatch.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'FAILED' }),
+      }),
     )
     expect(prisma.$transaction).toHaveBeenCalledTimes(1)
   })
@@ -176,13 +193,19 @@ describe('FlatFileService transfer', () => {
     ])
     expect(upload).toHaveBeenCalledWith(partner, '20250516191024.txt', Buffer.from('x'))
     expect(tx.flatFileBatch.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'SENT' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SENT' }),
+      }),
     )
     expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCEEDED' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'SUCCEEDED' }),
+      }),
     )
     expect(tx.addressChangeRequest.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'COMPLETED' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      }),
     )
   })
 })
