@@ -10,11 +10,20 @@ or stored workflow functions. It does not implement the service or saga itself.
 Once applied to a retained database, do not edit V1; use new versioned migrations.
 It is a fresh-install migration, not an upgrade of another experimental schema.
 
-`sql/V2__flat_file_delivery.sql` adds `flat_file_batch.file_content` (the exact
+`sql/V3__flat_file_delivery.sql` adds `flat_file_batch.file_content` (the exact
 generated file bytes) and per-partner SFTP settings on `partner_system`. SFTP
 passwords are AES-256-GCM envelopes encrypted by the application with the
 `SFTP_CREDENTIAL_ENCRYPTION_KEY` OpenShift secret; key-based auth stores only
 the path of a mounted key file.
+
+`sql/V4__partner_sftp_host_key.sql` adds `partner_system.sftp_host_key_fingerprints`,
+a comma-separated list of pinned `SHA256:<base64>` SSH host key fingerprints
+(several values allow key rotation). The transfer refuses to connect to a partner
+without one, and a mismatch fails the batch with `SFTP_HOST_KEY_MISMATCH` before
+credentials are sent. Obtain each fingerprint from the partner through a trusted
+channel (`ssh-keyscan -p 22 <host> | ssh-keygen -lf -` shows what the server
+presents). For local runs only, set `SFTP_ALLOW_UNVERIFIED_HOST_KEY=true` to skip
+the check; never set it in OpenShift.
 
 `seed/R__local_sample_data.sql` is local-only sample data. docker-compose adds
 the `seed/` location; the migrations image copies `sql/` alone, so the seed never
