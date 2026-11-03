@@ -6,6 +6,12 @@
   ],
   "packageRules": [
     {
+      "description": "@ts-rest/core and @ts-rest/open-api (3.x) only support zod ^3; hold zod at v3 until ts-rest supports v4",
+      "matchPackageNames": ["zod"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "Astro and Starlight have coupled peer ranges; update together",
       "matchFileNames": ["docs/package.json"],
       "matchPackageNames": ["astro", "@astrojs/*", "starlight-openapi"],
