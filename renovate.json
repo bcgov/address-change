@@ -15,6 +15,11 @@
       "description": "TypeScript 7 drops the compiler API Nest CLI needs; stay on 6 until 7.1",
       "matchPackageNames": ["typescript"],
       "allowedVersions": "<7"
+    },
+    {
+      "description": "@ts-rest/core and @ts-rest/open-api (3.x) only support zod ^3; hold zod at v3 until ts-rest supports v4",
+      "matchPackageNames": ["zod"],
+      "allowedVersions": "<4"
     }
   ]
 }
