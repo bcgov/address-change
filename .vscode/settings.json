@@ -7,5 +7,11 @@
   "biome.requireConfiguration": true,
   "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
   "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
-  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" }
+  "[javascript]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "sonarlint.connectedMode.project": {
+    "connectionId": "bcgov-sonarcloud",
+    "projectKey": "bcgov_address-change2"
+  }
 }
