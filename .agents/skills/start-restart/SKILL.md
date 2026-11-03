@@ -12,9 +12,9 @@ Run from the repository root. Never read `.env` files and never install tools au
 1. Read `.agents/local/preferences.json` (ignored by git, per user), e.g. `{"startMethod": "docker"}` or `{"startMethod": "launch"}`.
 2. If it is missing, or the user asks to change it, ask which they use and save it:
    - `docker`: everything in containers with Docker Compose.
-   - `launch`: database and migrations in Docker, backend and frontend as local Node 22 processes from `.vscode/launch.json` ("Debug full stack").
+   - `launch`: database and migrations in Docker, backend and frontend as local Node 26 processes from `.vscode/launch.json` ("Debug full stack").
 3. If the user states a preference in the request ("use docker this time"), follow it. Update the file only when they want it remembered.
-4. If the preferred tooling is unavailable (Docker not running, Node 22 missing), report that and offer the other method; do not switch silently.
+4. If the preferred tooling is unavailable (Docker not running, Node 26 missing), report that and offer the other method; do not switch silently.
 
 ## Docker
 
