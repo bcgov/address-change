@@ -18,6 +18,8 @@ permissions: {}
 jobs:
   backend-tests:
     name: Backend Tests
+    permissions:
+      contents: read
     if: (! github.event.pull_request.draft)
     runs-on: ubuntu-26.04
     timeout-minutes: 5
@@ -35,8 +37,6 @@ jobs:
           - 5432:5432
     steps:
       - uses: bcgov/action-test-and-analyse@8f699e3fd3fadd9a6adf6f4b1f2638ef7ecfefb9 # v2.0.0
-        env:
-          sonar_token: ${{ secrets.sonar_token_backend }}
         with:
           commands: |
             npm ci
@@ -45,27 +45,28 @@ jobs:
             npm run test:cov
           dir: backend
           node_version: "26"
-          sonar_args: >
-            -Dsonar.exclusions=**/coverage/**,**/node_modules/**,**/*spec.ts
-            -Dsonar.organization=bcgov-sonarcloud
-            -Dsonar.projectKey=address-change_backend
-            -Dsonar.sources=src
-            -Dsonar.test.inclusions=**/*spec.ts
-            -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
-          sonar_token: ${{ env.sonar_token }}
           dep_scan: warn
           supply_scan: true
-          triggers: ('backend/')
+          # Both reports are required for the combined SonarCloud analysis.
+          sonar_token: ""
+
+      - name: Upload backend coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-coverage
+          path: backend/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 1
 
   frontend-tests:
     name: Frontend Tests
+    permissions:
+      contents: read
     if: (! github.event.pull_request.draft)
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: bcgov/action-test-and-analyse@8f699e3fd3fadd9a6adf6f4b1f2638ef7ecfefb9 # v2.0.0
-        env:
-          sonar_token: ${{ secrets.sonar_token_frontend }}
         with:
           commands: |
             npm ci
@@ -74,17 +75,56 @@ jobs:
             npm run test:cov
           dir: frontend
           node_version: "26"
-          sonar_args: >
-            -Dsonar.exclusions=**/coverage/**,**/node_modules/**,**/*spec.ts,**/*test.tsx,**/routeTree.gen.ts
-            -Dsonar.organization=bcgov-sonarcloud
-            -Dsonar.projectKey=address-change_frontend
-            -Dsonar.sources=src
-            -Dsonar.test.inclusions=**/*spec.ts,**/*test.tsx
-            -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
-          sonar_token: ${{ env.sonar_token }}
           dep_scan: warn
           supply_scan: true
-          triggers: ('frontend/')
+          # Both reports are required for the combined SonarCloud analysis.
+          sonar_token: ""
+
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 1
+
+  sonar:
+    name: SonarCloud
+    needs: [backend-tests, frontend-tests]
+    if: >-
+      !github.event.pull_request.draft &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      github.actor != 'dependabot[bot]'
+    permissions:
+      contents: read
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Download backend coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-coverage
+          path: backend/coverage
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+      - name: Validate configuration and prepare coverage paths
+        run: |
+          set -euo pipefail
+          : "${SONAR_TOKEN:?Set the SONAR_TOKEN GitHub Actions secret}"
+          # Vitest writes paths relative to each package; scan from the repository root.
+          sed -i 's|^SF:src/|SF:backend/src/|' backend/coverage/lcov.info
+          sed -i 's|^SF:src/|SF:frontend/src/|' frontend/coverage/lcov.info
+      - name: Scan backend and frontend
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
 
   # https://github.com/marketplace/actions/aqua-security-trivy
   trivy:
@@ -150,7 +190,7 @@ jobs:
   # ==========================================================================
   results:
     name: Analysis Results
-    needs: [backend-tests, frontend-tests, trivy]
+    needs: [backend-tests, frontend-tests, sonar, trivy]
     if: always() && (! github.event.pull_request.draft)
     runs-on: ubuntu-slim
     timeout-minutes: 1
