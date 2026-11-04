@@ -142,6 +142,7 @@ export function buildOpenApiDocument(options: OpenApiOptions = {}): OpenAPIObjec
   // Path items carry a summary describing the resource.
   const pathSummaries: Record<string, string> = {
     [ADDRESS_CHANGE_ROUTE]: 'Address-change requests',
+    [`${ADDRESS_CHANGE_ROUTE}/me`]: 'The resident’s own address-change data',
     [`${ADDRESS_CHANGE_ROUTE}/drafts`]: 'Address-change drafts',
     [`${ADDRESS_CHANGE_ROUTE}/drafts/{requestId}`]: 'A single address-change draft',
   }

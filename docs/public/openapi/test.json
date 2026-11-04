@@ -685,6 +685,174 @@
       },
       "summary": "Address-change requests"
     },
+    "/api/v1/address-change/me": {
+      "delete": {
+        "description": "Deletes every address-change request owned by the authenticated resident, with its addresses, person details and delivery records. Only available in non-production environments; elsewhere it is reported as not found.",
+        "summary": "Delete the resident’s own address-change data",
+        "tags": [
+          "Address Change"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deletedRequests": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "deletedRequests"
+                  ],
+                  "additionalProperties": false,
+                  "example": {
+                    "deletedRequests": 1
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid bearer access token is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 401,
+                    "message": "A bearer access token is required",
+                    "error": "Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The access token does not include the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Missing address-change submission permission",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found for this resident.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Draft not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service or a downstream partner is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 503,
+                    "message": "Request could not be saved",
+                    "error": "Service Unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "deleteOwnAddressChangeData",
+        "security": [
+          {
+            "oauth2": [
+              "address-change-bc-6667"
+            ]
+          }
+        ]
+      },
+      "summary": "The resident’s own address-change data"
+    },
     "/api/v1/address-change/drafts/{requestId}": {
       "get": {
         "description": "Returns a draft address-change request owned by the authenticated resident. Drafts owned by other residents are reported as not found.",
