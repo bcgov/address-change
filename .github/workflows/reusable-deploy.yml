@@ -196,6 +196,7 @@ jobs:
               -p OIDC_JWKS_URI="${{ vars.OIDC_JWKS_URI }}"
               -p OIDC_SUBMISSION_SCOPE="${{ vars.OIDC_SUBMISSION_SCOPE }}"
               -p ENCRYPTION_KEY_ID="${{ vars.ENCRYPTION_KEY_ID }}"
+              -p ALLOW_DATA_RESET="${{ inputs.environment != 'prod' && 'true' || 'false' }}"
           - name: frontend
             file: frontend/openshift.deploy.yml
             parameters: >-
@@ -203,6 +204,7 @@ jobs:
               -p OIDC_AUTHORITY="${{ vars.OIDC_ISSUER }}"
               -p OIDC_CLIENT_ID="${{ vars.OIDC_AUDIENCE }}"
               -p OIDC_SCOPE="openid profile email ${{ vars.OIDC_SUBMISSION_SCOPE }}"
+              -p ALLOW_DATA_RESET="${{ inputs.environment != 'prod' && 'true' || 'false' }}"
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
     steps:

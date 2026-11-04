@@ -77,8 +77,11 @@ export function buildOpenApiDocument(options: OpenApiOptions = {}): OpenAPIObjec
   const issuer = options.issuer || DEFAULT_ISSUERS[environment]
   const scope = options.scope || DEFAULT_SCOPE
 
+  // The dev/test-only data reset route is deliberately left out of the public spec.
+  const { deleteOwnData: _omitted, ...documentedContract } = addressChangeContract
+
   const document = generateOpenApi(
-    addressChangeContract,
+    documentedContract,
     {
       info: {
         title: 'Address Change API',

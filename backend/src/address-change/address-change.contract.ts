@@ -126,6 +126,13 @@ export const addressChangeSummarySchema = z
   })
   .strict()
 
+export const addressChangeDeletionSchema = z
+  .object({
+    deletedRequests: z.number().int().min(0),
+  })
+  .strict()
+
+export type AddressChangeDeletion = z.infer<typeof addressChangeDeletionSchema>
 export type AddressChangeRequest = z.infer<typeof addressChangeRequestSchema>
 export type AddressChangeAcknowledgement = z.infer<typeof addressChangeAcknowledgementSchema>
 export type AddressChangeDraft = z.infer<typeof addressChangeDraftSchema>
@@ -204,6 +211,25 @@ export const addressChangeContract = contract.router({
           },
         ],
       },
+    } satisfies OpenApiRouteMetadata,
+  },
+  deleteOwnData: {
+    method: 'DELETE',
+    path: `${ADDRESS_CHANGE_ROUTE}/me`,
+    body: contract.noBody(),
+    responses: {
+      200: addressChangeDeletionSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      503: errorSchema,
+    },
+    summary: 'Delete the resident\u2019s own address-change data',
+    description:
+      'Deletes every address-change request owned by the authenticated resident, with its addresses, person details and delivery records. Only available in non-production environments; elsewhere it is reported as not found.',
+    metadata: {
+      operationId: 'deleteOwnAddressChangeData',
+      responseExamples: { 200: { deletedRequests: 1 } },
     } satisfies OpenApiRouteMetadata,
   },
   getDraft: {

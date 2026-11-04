@@ -43,6 +43,37 @@ body {
   margin: var(--layout-margin-xsmall) 0 0;
 }
 
+.page-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--layout-margin-medium);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--layout-padding-small, 0.5rem);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button--danger {
+  color: var(--support-border-color-danger, #ce3e39);
+}
+
+.icon-button--danger:hover {
+  border-color: var(--support-border-color-danger, #ce3e39);
+  background: var(--support-surface-color-danger, #f4e1e2);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--surface-color-border-active, #2e5dd7);
+  outline-offset: 2px;
+}
+
 .app-card {
   box-sizing: border-box;
   margin: 0 0 var(--layout-margin-large);
@@ -769,6 +800,7 @@ fieldset.app-card {
 .request-card-footer {
   display: flex;
   justify-content: flex-end;
+  gap: var(--layout-margin-medium);
   margin-top: var(--layout-margin-large);
 }
 .status-tag {
