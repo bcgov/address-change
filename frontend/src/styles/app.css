@@ -444,15 +444,6 @@ fieldset.app-card {
   background: var(--surface-color-background-light-gray);
 }
 
-/* Show a red asterisk alongside the design system's "(required)" text. */
-.bcds-react-aria-TextField--Label .required::after,
-.bcds-react-aria-Checkbox .required::after,
-.bcds-react-aria-Select[data-required] .bcds-react-aria-Select--Label::after {
-  margin-left: 0.25rem;
-  color: var(--support-border-color-danger, #ce3e39);
-  content: '*';
-}
-
 /* Vertically centre the design system alert banner icons with its text. */
 .bcds-Alert-Banner--Container {
   align-items: center;
