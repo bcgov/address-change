@@ -84,6 +84,27 @@ export class AddressChangeController {
     return this.service.getDraft(requestId, request.ownerSub)
   }
 
+  @Delete('drafts/:requestId')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteDraft(
+    @Param(
+      'requestId',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          badRequestProblem(
+            'Invalid request identifier',
+            [{ path: ['requestId'], code: 'invalid_string' }],
+            'path',
+          ),
+      }),
+    )
+    requestId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<void> {
+    return this.service.deleteDraft(requestId, request.ownerSub)
+  }
+
   @Post()
   @UseGuards(AccessTokenGuard)
   @HttpCode(HttpStatus.ACCEPTED)
