@@ -389,7 +389,7 @@ describe('AddressChange intake HTTP + SQL integration', () => {
         draft: next,
       })
     })
-    it('deletes only the caller\'s own draft', async () => {
+    it("deletes only the caller's own draft", async () => {
       const created = await saveDraft({ idempotencyKey: 'draft-key', draft }).expect(200)
       await request(app.getHttpServer())
         .delete(`/api/v1/address-change/drafts/${created.body.requestId}`)
