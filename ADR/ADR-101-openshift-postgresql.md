@@ -4,7 +4,7 @@ title: ADR-101 - Hosting on OpenShift with Patroni-managed PostgreSQL
 description: Record the decision to host the Address Change application and its Patroni-managed PostgreSQL database on BC Government Private Cloud OpenShift, considering funding constraints and limitations of the offered on-premises database service.
 ---
 
-- **Status:** Pending confirmation
+- **Status:** Accepted
 - **Decision Date:** September 16, 2026
 - **Deciders:** Craig, Poornima
 - **Category:** Hosting, Data
@@ -29,6 +29,8 @@ Under that service's operating model, the development team would not be given di
 A decision was needed to proceed with implementation while supporting consistent environments and automated, version-controlled database migrations.
 
 ## Decision
+
+The decision has been approved, and implementation is underway.
 
 We will use **Option 3: OpenShift with PostgreSQL hosted on OpenShift and managed by Patroni**.
 
