@@ -73,24 +73,13 @@ export function ServiceUnavailable() {
               strokeLinejoin="round"
               strokeWidth="6"
             />
-            <path
-              d="M48 22L152 126"
-              stroke="#fff"
-              strokeLinecap="round"
-              strokeWidth="20"
-            />
-            <path
-              d="M48 22L152 126"
-              stroke="#fcba19"
-              strokeLinecap="round"
-              strokeWidth="9"
-            />
+            <path d="M48 22L152 126" stroke="#fff" strokeLinecap="round" strokeWidth="20" />
+            <path d="M48 22L152 126" stroke="#fcba19" strokeLinecap="round" strokeWidth="9" />
           </svg>
           <h1>Service unavailable</h1>
           <p>
-            The Address Change service is temporarily unavailable. Any saved
-            drafts are safe. We will reconnect automatically when the service is
-            back.
+            The Address Change service is temporarily unavailable. Any saved drafts are safe. We
+            will reconnect automatically when the service is back.
           </p>
           <div
             aria-label="Time until next retry"
@@ -100,21 +89,14 @@ export function ServiceUnavailable() {
             className="service-unavailable-progress"
             role="progressbar"
           >
-            <div
-              className="service-unavailable-progress-bar"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="service-unavailable-progress-bar" style={{ width: `${progress}%` }} />
           </div>
           <p aria-live="polite" className="service-unavailable-status">
             {checking
               ? 'Checking service status…'
               : `Retrying in ${formatDuration(secondsLeft)} (attempt ${attempt + 1})`}
           </p>
-          <Button
-            isDisabled={checking}
-            onPress={() => setSecondsLeft(0)}
-            variant="primary"
-          >
+          <Button isDisabled={checking} onPress={() => setSecondsLeft(0)} variant="primary">
             Retry now
           </Button>
         </section>

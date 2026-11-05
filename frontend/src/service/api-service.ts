@@ -1,10 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
 import { getValidUser } from '@/auth/auth-service'
-import {
-  isServiceUnavailableError,
-  markServiceUnavailable,
-} from '@/service/service-status'
+import { isServiceUnavailableError, markServiceUnavailable } from '@/service/service-status'
 
 class APIService {
   private readonly client: AxiosInstance
