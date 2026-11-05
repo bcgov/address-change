@@ -981,6 +981,242 @@
           }
         ]
       },
+      "delete": {
+        "description": "Permanently deletes a draft address-change request owned by the authenticated resident. Submitted requests and drafts owned by other residents are reported as not found.",
+        "summary": "Delete an address-change draft",
+        "tags": [
+          "Address Change"
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "7c825573-3df5-4e63-b376-ef7a4057369d"
+            },
+            "description": "Identifier of the address-change request, as returned on creation."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The request completed successfully and there is no content to return."
+          },
+          "400": {
+            "description": "The request is malformed or fails validation. The body is an RFC 9457 problem details object; errors lists the invalid fields without echoing their values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "detail": {
+                      "type": "string"
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "location": {
+                            "type": "string",
+                            "enum": [
+                              "body",
+                              "query",
+                              "header",
+                              "path",
+                              "cookie"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "code",
+                          "message",
+                          "location"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "detail",
+                    "errors"
+                  ],
+                  "example": {
+                    "type": "about:blank",
+                    "title": "Bad Request",
+                    "status": 400,
+                    "detail": "Invalid request body",
+                    "errors": [
+                      {
+                        "type": "validation",
+                        "code": "invalid_string",
+                        "message": "Invalid value at /person/dateOfBirth",
+                        "location": "body"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A valid bearer access token is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 401,
+                    "message": "A bearer access token is required",
+                    "error": "Unauthorized"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The access token does not include the required scope.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 403,
+                    "message": "Missing address-change submission permission",
+                    "error": "Forbidden"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The requested resource was not found for this resident.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 404,
+                    "message": "Draft not found",
+                    "error": "Not Found"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The service or a downstream partner is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "statusCode": {
+                      "type": "number"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "statusCode",
+                    "message",
+                    "error"
+                  ],
+                  "example": {
+                    "statusCode": 503,
+                    "message": "Request could not be saved",
+                    "error": "Service Unavailable"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "operationId": "deleteAddressChangeDraft",
+        "security": [
+          {
+            "oauth2": [
+              "address-change-bc-6667"
+            ]
+          }
+        ]
+      },
       "summary": "A single address-change draft"
     },
     "/api/v1/address-change/drafts": {

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   HttpCode,
@@ -15,6 +16,7 @@ import {
 import { ADDRESS_CHANGE_PATH, API_VERSION, addressChangeContract } from './address-change.contract'
 import type {
   AddressChangeAcknowledgement,
+  AddressChangeDeletion,
   AddressChangeDraft,
   AddressChangeDraftResponse,
   AddressChangeRequest,
@@ -38,6 +40,13 @@ export class AddressChangeController {
   @HttpCode(HttpStatus.OK)
   list(@Req() request: AuthenticatedRequest): Promise<AddressChangeSummary[]> {
     return this.service.list(request.ownerSub)
+  }
+
+  @Delete('me')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.OK)
+  deleteOwnData(@Req() request: AuthenticatedRequest): Promise<AddressChangeDeletion> {
+    return this.service.deleteOwnData(request.ownerSub)
   }
 
   @Put('drafts')
@@ -73,6 +82,27 @@ export class AddressChangeController {
     @Req() request: AuthenticatedRequest,
   ): Promise<AddressChangeDraftResponse> {
     return this.service.getDraft(requestId, request.ownerSub)
+  }
+
+  @Delete('drafts/:requestId')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteDraft(
+    @Param(
+      'requestId',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          badRequestProblem(
+            'Invalid request identifier',
+            [{ path: ['requestId'], code: 'invalid_string' }],
+            'path',
+          ),
+      }),
+    )
+    requestId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<void> {
+    return this.service.deleteDraft(requestId, request.ownerSub)
   }
 
   @Post()

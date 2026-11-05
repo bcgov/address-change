@@ -2,7 +2,10 @@ import type { FC, ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AlertBanner, Button } from '@bcgov/design-system-react-components'
+import { isDataResetEnabled } from '@/auth/auth-service'
 import PageHeading from '@/components/common/PageHeading'
+import DeleteDataModal from './DeleteDataModal'
+import DeleteDraftModal from './DeleteDraftModal'
 import {
   listAddressChangeRequests,
   type AddressChangeOperation,
@@ -55,10 +58,11 @@ const Detail: FC<{ term: string; children: ReactNode; className?: string }> = ({
   </div>
 )
 
-const RequestCard: FC<{ request: AddressChangeSummary; onResume: (id: string) => void }> = ({
-  request,
-  onResume,
-}) => {
+const RequestCard: FC<{
+  request: AddressChangeSummary
+  onResume: (id: string) => void
+  onDelete: (id: string) => void
+}> = ({ request, onResume, onDelete }) => {
   const isDraft = request.status === 'DRAFT'
   return (
     <article
@@ -105,6 +109,9 @@ const RequestCard: FC<{ request: AddressChangeSummary; onResume: (id: string) =>
       {isDraft && (
         <footer className="request-card-footer">
           <Button onPress={() => onResume(request.requestId)}>Continue draft</Button>
+          <Button danger onPress={() => onDelete(request.requestId)} variant="secondary">
+            Delete draft
+          </Button>
         </footer>
       )}
     </article>
@@ -115,6 +122,8 @@ const RequestsPage: FC = () => {
   const [requests, setRequests] = useState<AddressChangeSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [draftToDelete, setDraftToDelete] = useState<string | null>(null)
 
   useEffect(() => {
     void listAddressChangeRequests()
@@ -131,7 +140,31 @@ const RequestsPage: FC = () => {
   return (
     <section aria-labelledby="requests-heading">
       <PageHeading
-        actions={canStart && requests.length > 0 && <Button onPress={startNew}>New request</Button>}
+        actions={
+          <div className="page-heading-actions">
+            {isDataResetEnabled() && !isLoading && !loadError && requests.length > 0 && (
+              <button
+                aria-label="Delete my test data"
+                className="icon-button icon-button--danger"
+                onClick={() => setIsDeleteOpen(true)}
+                title="Delete my test data"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="currentColor"
+                  height="20"
+                  viewBox="0 0 16 16"
+                  width="20"
+                >
+                  <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 1 0" />
+                  <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
+                </svg>
+              </button>
+            )}
+            {canStart && requests.length > 0 && <Button onPress={startNew}>New request</Button>}
+          </div>
+        }
         description="Start an address change or pick up where you left off."
         title="Address change requests"
       />
@@ -154,8 +187,31 @@ const RequestsPage: FC = () => {
       {!isLoading &&
         !loadError &&
         requests.map((request) => (
-          <RequestCard key={request.requestId} onResume={resume} request={request} />
+          <RequestCard
+            key={request.requestId}
+            onDelete={setDraftToDelete}
+            onResume={resume}
+            request={request}
+          />
         ))}
+      <DeleteDraftModal
+        onClose={() => setDraftToDelete(null)}
+        onDeleted={(requestId) => {
+          setRequests((current) => current.filter((request) => request.requestId !== requestId))
+          setDraftToDelete(null)
+        }}
+        requestId={draftToDelete}
+      />
+      {isDataResetEnabled() && (
+        <DeleteDataModal
+          isOpen={isDeleteOpen}
+          onClose={() => setIsDeleteOpen(false)}
+          onDeleted={() => {
+            setRequests([])
+            setIsDeleteOpen(false)
+          }}
+        />
+      )}
     </section>
   )
 }

@@ -1,5 +1,5 @@
 # Build
-FROM node:26.12.1-bookworm-slim AS build
+FROM node:26.13.0-bookworm-slim AS build
 
 # Copy, build static files; see .dockerignore for exclusions
 WORKDIR /app
@@ -8,7 +8,7 @@ ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 RUN npm run deploy
 
 # Dependencies
-FROM node:26.12.1-bookworm-slim AS dependencies
+FROM node:26.13.0-bookworm-slim AS dependencies
 
 # Copy, build static files; see .dockerignore for exclusions
 WORKDIR /app
@@ -17,7 +17,7 @@ ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
 RUN npm ci --ignore-scripts --no-update-notifier --omit=dev
 
 # Pin the patched runtime; the Distroless Node 26 image still ships an older Node.
-FROM node:26.12.1-bookworm-slim
+FROM node:26.13.0-bookworm-slim
 ENV NODE_ENV=production
 
 # Copy app and dependencies

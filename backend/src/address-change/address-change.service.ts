@@ -8,10 +8,12 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
 import { Prisma } from '../../generated/prisma/client.js'
 import { PrismaService } from '../prisma.service'
 import type {
   AddressChangeAcknowledgement,
+  AddressChangeDeletion,
   AddressChangeDraft,
   AddressChangeDraftResponse,
   AddressChangeRequest,
@@ -38,7 +40,17 @@ export class AddressChangeService {
   constructor(
     private readonly database: PrismaService,
     private readonly encryption: RequestEncryptionService,
+    private readonly config: ConfigService,
   ) {}
+
+  /** Deletes only the caller's records; child tables are removed by ON DELETE CASCADE. */
+  async deleteOwnData(ownerSub: string): Promise<AddressChangeDeletion> {
+    if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
+    if (this.config.get<string>('ALLOW_DATA_RESET') !== 'true') throw new NotFoundException()
+    const deletedRequests = await this.database.$executeRaw`
+      DELETE FROM address_change.address_change_request WHERE owner_sub = ${ownerSub}`
+    return { deletedRequests }
+  }
 
   async list(ownerSub: string): Promise<AddressChangeSummary[]> {
     if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
@@ -116,6 +128,15 @@ export class AddressChangeService {
         this.encryption.decrypt(row.raw_payload_encrypted, `request:${row.request_id}:payload`),
       ),
     }
+  }
+
+  /** Deletes one of the caller's drafts; submitted requests are never deleted here. */
+  async deleteDraft(requestId: string, ownerSub: string): Promise<void> {
+    if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
+    const deleted = await this.database.$executeRaw`
+      DELETE FROM address_change.address_change_request
+      WHERE request_id = ${requestId}::uuid AND owner_sub = ${ownerSub} AND status = 'DRAFT'`
+    if (deleted === 0) throw new NotFoundException('Draft not found')
   }
 
   private async withRetry<T>(ownerSub: string, operation: () => Promise<T>): Promise<T> {

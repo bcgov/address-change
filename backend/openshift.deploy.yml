@@ -91,6 +91,9 @@ parameters:
   - name: APP_SECRET
     description: Pre-created Secret holding ADDRESS_CHANGE_ENCRYPTION_KEYS
     value: address-change-app
+  - name: ALLOW_DATA_RESET
+    description: Enables the resident self-service data deletion route; must be "false" in production
+    value: "false"
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -254,6 +257,8 @@ objects:
                   value: ${OIDC_SUBMISSION_SCOPE}
                 - name: ADDRESS_CHANGE_ENCRYPTION_KEY_ID
                   value: ${ENCRYPTION_KEY_ID}
+                - name: ALLOW_DATA_RESET
+                  value: "${ALLOW_DATA_RESET}"
                 - name: ADDRESS_CHANGE_ENCRYPTION_KEYS
                   valueFrom:
                     secretKeyRef:

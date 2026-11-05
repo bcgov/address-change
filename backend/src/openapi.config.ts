@@ -12,6 +12,7 @@ import type { OpenApiEnvironment } from './openapi.oauth2'
 const responseDescriptions: Record<string, string> = {
   200: 'The request completed successfully.',
   202: 'The request was accepted for processing.',
+  204: 'The request completed successfully and there is no content to return.',
   400: 'The request is malformed or fails validation. The body is an RFC 9457 problem details object; errors lists the invalid fields without echoing their values.',
   401: 'A valid bearer access token is required.',
   403: 'The access token does not include the required scope.',
@@ -77,8 +78,11 @@ export function buildOpenApiDocument(options: OpenApiOptions = {}): OpenAPIObjec
   const issuer = options.issuer || DEFAULT_ISSUERS[environment]
   const scope = options.scope || DEFAULT_SCOPE
 
+  // The dev/test-only data reset route is deliberately left out of the public spec.
+  const { deleteOwnData: _omitted, ...documentedContract } = addressChangeContract
+
   const document = generateOpenApi(
-    addressChangeContract,
+    documentedContract,
     {
       info: {
         title: 'Address Change API',

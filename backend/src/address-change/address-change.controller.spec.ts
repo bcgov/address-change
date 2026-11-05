@@ -72,6 +72,10 @@ describe('AddressChange intake HTTP + SQL integration', () => {
       await pg.exec(readFileSync(resolve(migrations, file), 'utf8'))
     }
     const database = {
+      $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        const sql = Prisma.sql(strings, ...values)
+        return (await pg.query(sql.text, sql.values)).affectedRows
+      },
       $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
         const sql = Prisma.sql(strings, ...values)
         return (await pg.query(sql.text, sql.values)).rows
@@ -102,6 +106,7 @@ describe('AddressChange intake HTTP + SQL integration', () => {
       },
     }
     const config = new ConfigService({
+      ALLOW_DATA_RESET: 'true',
       ADDRESS_CHANGE_ENCRYPTION_KEY_ID: 'test-only',
       ADDRESS_CHANGE_ENCRYPTION_KEYS: JSON.stringify({
         'test-only': randomBytes(32).toString('base64'),
@@ -186,6 +191,35 @@ describe('AddressChange intake HTTP + SQL integration', () => {
       expect(encryption.decrypt(encrypted, `request:${response.body.requestId}:${column}`)).toBe(
         value,
       )
+    }
+  })
+  it("deletes only the caller's records, including child rows", async () => {
+    await submit().expect(202)
+    await submit({ ...validRequest, idempotencyKey: 'other-key' }, 'synthetic-B').expect(202)
+    const response = await request(app.getHttpServer())
+      .delete('/api/v1/address-change/me')
+      .set('Authorization', 'Bearer synthetic-A')
+      .expect(200)
+    expect(response.body).toEqual({ deletedRequests: 1 })
+    const remaining = await rows('address_change_request')
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0]).toMatchObject({ owner_sub: 'resident-B' })
+    expect(await rows('request_person')).toHaveLength(1)
+    expect(await rows('processing_operation')).toHaveLength(2)
+  })
+  it('requires authentication and is not found when data reset is disabled', async () => {
+    await request(app.getHttpServer()).delete('/api/v1/address-change/me').expect(401)
+    const config = app.get(ConfigService)
+    config.set('ALLOW_DATA_RESET', 'false')
+    try {
+      await submit().expect(202)
+      await request(app.getHttpServer())
+        .delete('/api/v1/address-change/me')
+        .set('Authorization', 'Bearer synthetic-A')
+        .expect(404)
+      expect(await rows('address_change_request')).toHaveLength(1)
+    } finally {
+      config.set('ALLOW_DATA_RESET', 'true')
     }
   })
   it('returns the same ID on identical replay without duplicate rows', async () => {
@@ -366,6 +400,19 @@ describe('AddressChange intake HTTP + SQL integration', () => {
         status: 'DRAFT',
         draft: next,
       })
+    })
+    it("deletes only the caller's own draft", async () => {
+      const created = await saveDraft({ idempotencyKey: 'draft-key', draft }).expect(200)
+      await request(app.getHttpServer())
+        .delete(`/api/v1/address-change/drafts/${created.body.requestId}`)
+        .set('Authorization', 'Bearer synthetic-B')
+        .expect(404)
+      expect(await rows('address_change_request')).toHaveLength(1)
+      await request(app.getHttpServer())
+        .delete(`/api/v1/address-change/drafts/${created.body.requestId}`)
+        .set('Authorization', 'Bearer synthetic-A')
+        .expect(204)
+      expect(await rows('address_change_request')).toHaveLength(0)
     })
     it('lists a draft with no effective date', async () => {
       await saveDraft({ idempotencyKey: 'draft-key', draft }).expect(200)

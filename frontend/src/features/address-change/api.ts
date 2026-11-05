@@ -52,6 +52,15 @@ export async function getAddressChangeDraft(
   return response.data
 }
 
+export async function deleteAddressChangeDraft(requestId: string): Promise<void> {
+  await client().delete(`/v1/address-change/drafts/${encodeURIComponent(requestId)}`)
+}
+
+export async function deleteOwnAddressChangeData(): Promise<{ deletedRequests: number }> {
+  const response = await client().delete<{ deletedRequests: number }>('/v1/address-change/me')
+  return response.data
+}
+
 export async function submitAddressChange(
   body: AddressChangeRequestBody,
 ): Promise<AddressChangeAcknowledgement> {
