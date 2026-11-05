@@ -63,7 +63,7 @@ parameters:
     value: address-change-sftp
   - name: FLAT_FILE_S3_BUCKET
     description: Private bucket for immutable flat-file archives
-    required: true
+    value: ""
   - name: AWS_REGION
     description: Region containing the flat-file archive bucket
     value: ca-central-1
