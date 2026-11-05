@@ -283,7 +283,7 @@ export class AddressChangeService {
         const next = body.newAddress
         // Existing frontend calls this isBillingAddressSame, but its UI collects
         // mailing-address intent. Preserve wire compatibility and map explicitly.
-        const mailing = body.isBillingAddressSame ? undefined : body.mailingAddress
+        const mailing = body.isBillingAddressSame ? body.newAddress : body.mailingAddress
         await tx.$executeRaw`
           INSERT INTO address_change.submitted_address
             (request_id, old_address_line_one, old_address_line_two, old_city, old_province,

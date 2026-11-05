@@ -61,6 +61,18 @@ parameters:
   - name: SFTP_SECRET
     description: Secret holding SFTP_CREDENTIAL_ENCRYPTION_KEY (base64, 32 bytes); created manually per namespace
     value: address-change-sftp
+  - name: FLAT_FILE_S3_BUCKET
+    description: Private bucket for immutable flat-file archives
+    required: true
+  - name: AWS_REGION
+    description: Region containing the flat-file archive bucket
+    value: ca-central-1
+  - name: FLAT_FILE_S3_ENDPOINT
+    description: Optional endpoint for S3-compatible object storage
+    value: ""
+  - name: S3_SECRET
+    description: Optional Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY keys
+    value: address-change-s3
   - name: OIDC_ISSUER
     description: OIDC issuer URL used to validate access tokens
     required: true
@@ -213,6 +225,24 @@ objects:
                     secretKeyRef:
                       name: ${SFTP_SECRET}
                       key: SFTP_CREDENTIAL_ENCRYPTION_KEY
+                      optional: true
+                - name: FLAT_FILE_S3_BUCKET
+                  value: ${FLAT_FILE_S3_BUCKET}
+                - name: AWS_REGION
+                  value: ${AWS_REGION}
+                - name: FLAT_FILE_S3_ENDPOINT
+                  value: ${FLAT_FILE_S3_ENDPOINT}
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: AWS_ACCESS_KEY_ID
+                      optional: true
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: AWS_SECRET_ACCESS_KEY
                       optional: true
                 - name: OIDC_ISSUER
                   value: ${OIDC_ISSUER}
