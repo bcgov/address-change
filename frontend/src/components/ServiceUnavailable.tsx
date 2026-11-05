@@ -17,9 +17,14 @@ export function formatDuration(totalSeconds: number): string {
   return `${plural(minutes, 'minute')} ${plural(seconds, 'second')}`
 }
 
+const HEALTH_CHECK_TIMEOUT_MS = 10_000
+
 async function backendIsUp(): Promise<boolean> {
   try {
-    const response = await fetch('/api/health', { cache: 'no-store' })
+    const response = await fetch('/api/health', {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
+    })
     return response.ok
   } catch {
     return false
