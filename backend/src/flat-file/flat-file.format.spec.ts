@@ -1,124 +1,108 @@
 import {
-  COLUMNS,
   LINE_ENDING,
-  type FlatFileRecord,
+  encodeFlatFileContent,
   fileStamp,
   formatFlatFile,
+  type FlatFileColumn,
+  type FlatFileSourceRow,
 } from './flat-file.format'
 
-const charLength = (value: string) => [...value].length
+const columns: FlatFileColumn[] = [
+  {
+    position: 1,
+    fieldKey: 'submission_timestamp',
+    columnName: 'Submission timestamp',
+    enabled: true,
+    minWidth: 14,
+    format: 'YYYYMMDDHHmmss',
+  },
+  {
+    position: 2,
+    fieldKey: 'last_name',
+    columnName: 'Surname',
+    enabled: true,
+    minWidth: 0,
+    format: null,
+  },
+  {
+    position: 3,
+    fieldKey: 'middle_initials',
+    columnName: 'Middle initials',
+    enabled: true,
+    minWidth: 0,
+    format: null,
+  },
+  {
+    position: 4,
+    fieldKey: 'ignored',
+    columnName: 'Ignored',
+    enabled: false,
+    minWidth: 0,
+    format: null,
+  },
+]
 
-function record(
-  overrides: Partial<FlatFileRecord['person']> = {},
-  address: Partial<FlatFileRecord['address']> = {},
-) {
+function row(overrides: Partial<FlatFileSourceRow> = {}): FlatFileSourceRow {
   return {
-    request: {
-      receivedAt: new Date('2025-05-17T02:10:24Z'),
-      effectiveDate: new Date('2025-06-01'),
-    },
-    person: {
-      firstName: 'Kathleen',
-      firstMiddleInitial: null,
-      secondMiddleInitial: null,
-      lastName: 'Svedberg',
-      dateOfBirth: new Date('1989-03-16'),
-      emailAddress: null,
-      daytimePhone: null,
-      driversLicenseNumberEncrypted: null,
-      heightCm: null,
-      weightKg: null,
-      phnEncrypted: null,
-      securityKeywordEncrypted: null,
-      ...overrides,
-    },
-    address: {
-      oldAddressLineOne: '7155 Dallas Dr',
-      oldAddressLineTwo: null,
-      oldCity: 'Kamloops',
-      oldProvince: 'BC',
-      oldPostalCode: 'V2C4T1',
-      oldCountry: 'CA',
-      newAddressLineOne: '1128 Bentley Pl',
-      newAddressLineTwo: null,
-      newCity: 'Kamloops',
-      newProvince: 'BC',
-      newPostalCode: 'V2B5M5',
-      newCountry: 'CA',
-      isMailingAddressSame: true,
-      mailingAddressLineOne: null,
-      mailingAddressLineTwo: null,
-      mailingCity: null,
-      mailingProvince: null,
-      mailingPostalCode: null,
-      mailingCountry: null,
-      ...address,
-    },
-  } as FlatFileRecord
+    request_id: 'request-1',
+    submission_timestamp: new Date('2025-05-17T02:10:24Z'),
+    last_name: 'Svedberg',
+    middle_initials: 'C J',
+    ignored: 'not output',
+    ...overrides,
+  }
 }
 
 const lines = (content: string) => content.split(LINE_ENDING).slice(0, -1)
 
 describe('formatFlatFile', () => {
-  it('writes one CRLF-terminated line per record with no header', () => {
-    const content = formatFlatFile([record(), record({ lastName: 'Zhang' })])
-    expect(lines(content)).toHaveLength(2)
+  it('uses configured order, omits disabled columns, and emits no header by default', () => {
+    const content = formatFlatFile([row()], columns, false)
+    expect(lines(content)).toHaveLength(1)
+    expect(lines(content)[0]).toContain('20250516191024 Svedberg C J')
+    expect(content).not.toContain('Surname')
+    expect(content).not.toContain('not output')
+  })
+
+  it('includes configured names in a header row when enabled', () => {
+    const content = formatFlatFile([row()], columns, true)
+    const [header, data] = lines(content)
+    expect(header).toContain('Submission timestamp')
+    expect(header).toContain('Surname')
+    expect(data).toContain('20250516191024')
+    expect(data).toContain('Svedberg')
+    expect(data).toContain('C J')
+  })
+
+  it('pads each column to its longest value and preserves CRLF', () => {
+    const content = formatFlatFile(
+      [row({ last_name: 'Li' }), row({ last_name: 'Mandira Chengappa' })],
+      columns,
+      false,
+    )
+    const [first, second] = lines(content)
+    expect(first?.indexOf('C J')).toBe(second?.indexOf('C J'))
     expect(content.endsWith(LINE_ENDING)).toBe(true)
   })
 
-  it('starts with received_at in Vancouver time and effective_date', () => {
-    const [line] = lines(formatFlatFile([record()]))
-    expect(line?.startsWith('20250516191024 20250601 ')).toBe(true)
+  it('fails clearly when a configured field is not exposed by the view', () => {
+    expect(() =>
+      formatFlatFile([row()], [{ ...columns[0]!, fieldKey: 'missing_field' }], false),
+    ).toThrow('not exposed by flat_file_source')
   })
 
-  it('sizes each column to its longest value and separates columns with one space', () => {
-    const [first, second] = lines(
-      formatFlatFile([record({ lastName: 'Li' }), record({ lastName: 'Mandira Chengappa' })]),
-    )
-    expect(first).toContain('Li                Kathleen')
-    expect(second).toContain('Mandira Chengappa Kathleen')
-  })
-
-  it('keeps minimum widths for blank fixed-length columns', () => {
-    const [line] = lines(formatFlatFile([record()]))
-    const expectedLength =
-      COLUMNS.reduce((total, column) => total + (column.minWidth ?? 0), 0) + COLUMNS.length - 1
-    expect(charLength(line ?? '')).toBeGreaterThanOrEqual(expectedLength)
-    expect(line).toContain('19890316 ' + ' '.repeat(8) + ' ' + ' '.repeat(10))
-  })
-
-  it('pads Unicode by characters so every line has the same length', () => {
-    const content = formatFlatFile([record({ firstName: 'ᐊᓂᔑᓈᐯ' }), record({ firstName: 'Bo' })])
-    const [first, second] = lines(content)
-    expect(charLength(first ?? '')).toBe(charLength(second ?? ''))
-    expect(first).toContain('ᐊᓂᔑᓈᐯ')
-  })
-
-  it('never truncates long values', () => {
-    const long = 'x'.repeat(200)
-    const [line] = lines(formatFlatFile([record({}, { newAddressLineOne: long })]))
-    expect(line).toContain(long)
-  })
-
-  it('writes mailing flag as Y/N and decimals as text', () => {
-    const [line] = lines(
-      formatFlatFile([
-        record(
-          {
-            heightCm: { toString: () => '183' } as never,
-            weightKg: { toString: () => '127.3' } as never,
-          },
-          { isMailingAddressSame: false, mailingAddressLineOne: 'PO Box 3115' },
-        ),
-      ]),
-    )
-    expect(line).toContain('183 127.3')
-    expect(line).toContain(' N PO Box 3115')
+  it('rejects empty configurations', () => {
+    expect(() => formatFlatFile([row()], [], false)).toThrow('no enabled columns')
   })
 })
 
-describe('fileStamp', () => {
-  it('uses Vancouver local date and time', () => {
+describe('file encoding and timestamps', () => {
+  it('rejects non-ASCII characters rather than silently corrupting them', () => {
+    expect(() => encodeFlatFileContent('Sḵwx̱wú7mesh', 'US-ASCII')).toThrow('cannot be represented')
+    expect(encodeFlatFileContent('ASCII\r\n', 'US-ASCII').toString('ascii')).toBe('ASCII\r\n')
+  })
+
+  it('uses Vancouver local date and time for file timestamps', () => {
     expect(fileStamp(new Date('2025-05-17T06:30:00Z'))).toEqual({
       date: '20250516',
       time: '233000',

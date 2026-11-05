@@ -257,6 +257,18 @@ describe('AddressChange intake HTTP + SQL integration', () => {
     await submit(validRequest, 'synthetic-B').expect(202)
     expect(await rows('address_change_request')).toHaveLength(2)
   })
+  it('copies the new residential address into mailing fields when they are the same', async () => {
+    await submit().expect(202)
+    expect((await rows('submitted_address'))[0]).toMatchObject({
+      is_mailing_address_same: true,
+      mailing_address_line_one: validRequest.newAddress.addressLineOne,
+      mailing_address_line_two: validRequest.newAddress.addressLineTwo ?? null,
+      mailing_city: validRequest.newAddress.locality,
+      mailing_province: validRequest.newAddress.region,
+      mailing_postal_code: validRequest.newAddress.postalCode,
+      mailing_country: validRequest.newAddress.country,
+    })
+  })
   it.each(['COMPLETED', 'CLOSED'])(
     'allows a new request after %s while preserving old-key replay',
     async (status) => {
