@@ -5,6 +5,7 @@ import { AlertBanner, Button } from '@bcgov/design-system-react-components'
 import { isDataResetEnabled } from '@/auth/auth-service'
 import PageHeading from '@/components/common/PageHeading'
 import DeleteDataModal from './DeleteDataModal'
+import DeleteDraftModal from './DeleteDraftModal'
 import {
   listAddressChangeRequests,
   type AddressChangeOperation,
@@ -57,10 +58,11 @@ const Detail: FC<{ term: string; children: ReactNode; className?: string }> = ({
   </div>
 )
 
-const RequestCard: FC<{ request: AddressChangeSummary; onResume: (id: string) => void }> = ({
-  request,
-  onResume,
-}) => {
+const RequestCard: FC<{
+  request: AddressChangeSummary
+  onResume: (id: string) => void
+  onDelete: (id: string) => void
+}> = ({ request, onResume, onDelete }) => {
   const isDraft = request.status === 'DRAFT'
   return (
     <article
@@ -107,6 +109,9 @@ const RequestCard: FC<{ request: AddressChangeSummary; onResume: (id: string) =>
       {isDraft && (
         <footer className="request-card-footer">
           <Button onPress={() => onResume(request.requestId)}>Continue draft</Button>
+          <Button danger onPress={() => onDelete(request.requestId)} variant="secondary">
+            Delete draft
+          </Button>
         </footer>
       )}
     </article>
@@ -118,6 +123,7 @@ const RequestsPage: FC = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [draftToDelete, setDraftToDelete] = useState<string | null>(null)
 
   useEffect(() => {
     void listAddressChangeRequests()
@@ -181,8 +187,21 @@ const RequestsPage: FC = () => {
       {!isLoading &&
         !loadError &&
         requests.map((request) => (
-          <RequestCard key={request.requestId} onResume={resume} request={request} />
+          <RequestCard
+            key={request.requestId}
+            onDelete={setDraftToDelete}
+            onResume={resume}
+            request={request}
+          />
         ))}
+      <DeleteDraftModal
+        onClose={() => setDraftToDelete(null)}
+        onDeleted={(requestId) => {
+          setRequests((current) => current.filter((request) => request.requestId !== requestId))
+          setDraftToDelete(null)
+        }}
+        requestId={draftToDelete}
+      />
       {isDataResetEnabled() && (
         <DeleteDataModal
           isOpen={isDeleteOpen}

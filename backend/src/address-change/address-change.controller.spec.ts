@@ -389,6 +389,19 @@ describe('AddressChange intake HTTP + SQL integration', () => {
         draft: next,
       })
     })
+    it("deletes only the caller's own draft", async () => {
+      const created = await saveDraft({ idempotencyKey: 'draft-key', draft }).expect(200)
+      await request(app.getHttpServer())
+        .delete(`/api/v1/address-change/drafts/${created.body.requestId}`)
+        .set('Authorization', 'Bearer synthetic-B')
+        .expect(404)
+      expect(await rows('address_change_request')).toHaveLength(1)
+      await request(app.getHttpServer())
+        .delete(`/api/v1/address-change/drafts/${created.body.requestId}`)
+        .set('Authorization', 'Bearer synthetic-A')
+        .expect(204)
+      expect(await rows('address_change_request')).toHaveLength(0)
+    })
     it('lists a draft with no effective date', async () => {
       await saveDraft({ idempotencyKey: 'draft-key', draft }).expect(200)
       const list = await request(app.getHttpServer())

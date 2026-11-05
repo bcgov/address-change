@@ -259,6 +259,26 @@ export const addressChangeContract = contract.router({
       },
     } satisfies OpenApiRouteMetadata,
   },
+  deleteDraft: {
+    method: 'DELETE',
+    path: `${ADDRESS_CHANGE_ROUTE}/drafts/:requestId`,
+    pathParams: z.object({ requestId: z.string().uuid() }),
+    body: contract.noBody(),
+    responses: {
+      204: contract.noBody(),
+      400: problemDetailsSchema,
+      401: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      503: errorSchema,
+    },
+    summary: 'Delete an address-change draft',
+    description:
+      'Permanently deletes a draft address-change request owned by the authenticated resident. Submitted requests and drafts owned by other residents are reported as not found.',
+    metadata: {
+      operationId: 'deleteAddressChangeDraft',
+    } satisfies OpenApiRouteMetadata,
+  },
   saveDraft: {
     method: 'PUT',
     path: `${ADDRESS_CHANGE_ROUTE}/drafts`,

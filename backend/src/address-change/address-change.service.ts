@@ -130,6 +130,15 @@ export class AddressChangeService {
     }
   }
 
+  /** Deletes one of the caller's drafts; submitted requests are never deleted here. */
+  async deleteDraft(requestId: string, ownerSub: string): Promise<void> {
+    if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
+    const deleted = await this.database.$executeRaw`
+      DELETE FROM address_change.address_change_request
+      WHERE request_id = ${requestId}::uuid AND owner_sub = ${ownerSub} AND status = 'DRAFT'`
+    if (deleted === 0) throw new NotFoundException('Draft not found')
+  }
+
   private async withRetry<T>(ownerSub: string, operation: () => Promise<T>): Promise<T> {
     if (!ownerSub?.trim()) throw new UnauthorizedException('A validated subject is required')
     // Retry only aborted DB transactions, never a partner call (none happens during intake).
