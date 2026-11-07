@@ -5,6 +5,7 @@ import * as ReactDOM from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 import { AuthProvider } from '@/auth/AuthProvider'
 import { loadRuntimeConfig } from '@/auth/auth-service'
+import { AppRoot } from './AppRoot'
 
 // Import bootstrap styles
 import '@/scss/styles.scss'
@@ -28,7 +29,9 @@ await loadRuntimeConfig()
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
     <AuthProvider>
-      <RouterProvider router={router} />
+      <AppRoot>
+        <RouterProvider router={router} />
+      </AppRoot>
     </AuthProvider>
   </StrictMode>,
 )
