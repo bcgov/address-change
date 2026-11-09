@@ -30,6 +30,7 @@ model PartnerSystem {
   sftpKeyPath             String?  @map("sftp_key_path")
   sftpRemoteDirectory     String?  @map("sftp_remote_directory")
   sftpHostKeyFingerprints String?  @map("sftp_host_key_fingerprints")
+  sftpUseTempFile         Boolean  @default(true) @map("sftp_use_temp_file")
   createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy               String   @default(dbgenerated("CURRENT_USER")) @map("created_by")
   updatedAt               DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)

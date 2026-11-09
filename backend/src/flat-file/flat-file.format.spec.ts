@@ -2,6 +2,7 @@ import {
   LINE_ENDING,
   encodeFlatFileContent,
   fileStamp,
+  flatFileName,
   formatFlatFile,
   type FlatFileColumn,
   type FlatFileSourceRow,
@@ -54,6 +55,18 @@ function row(overrides: Partial<FlatFileSourceRow> = {}): FlatFileSourceRow {
 }
 
 const lines = (content: string) => content.split(LINE_ENDING).slice(0, -1)
+
+describe('flatFileName', () => {
+  const now = new Date('2025-05-17T02:10:24Z')
+
+  it('builds a lower-case snake-case name with the Vancouver date', () => {
+    expect(flatFileName('ICBC', now)).toBe('acbc_requests_icbc_2025_05_16.txt')
+  })
+
+  it('joins words in the partner name with underscores', () => {
+    expect(flatFileName(' Health / MSP ', now)).toBe('acbc_requests_health_msp_2025_05_16.txt')
+  })
+})
 
 describe('formatFlatFile', () => {
   it('uses configured order, omits disabled columns, and emits no header by default', () => {

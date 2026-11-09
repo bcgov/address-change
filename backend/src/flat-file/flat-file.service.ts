@@ -8,6 +8,7 @@ import {
   type FlatFileSourceRow,
   encodeFlatFileContent,
   fileStamp,
+  flatFileName,
   formatFlatFile,
 } from './flat-file.format'
 import { summarizeRequestStatus } from './request-status'
@@ -109,8 +110,9 @@ export class FlatFileService {
       lineEnding: 'CRLF',
       columns,
     }
+    const fileName = flatFileName(partner.partnerName, now)
     const batchId = await this.prisma.$transaction((tx) =>
-      this.freezeBatch(tx, partner, now, snapshot),
+      this.freezeBatch(tx, partner, now, snapshot, fileName),
     )
     if (!batchId) {
       return {
@@ -126,12 +128,9 @@ export class FlatFileService {
         formatFlatFile(records, columns, partner.includeHeader),
         partner.flatFileEncoding,
       )
-      const { date, time } = fileStamp(now)
-      const fileName = `${partner.partnerCode}.Address.${date}.${time}.TXT`
       await this.prisma.flatFileBatch.update({
         where: { batchId },
         data: {
-          fileName,
           fileContent: new Uint8Array(content),
           checksum: createHash('sha256').update(content).digest('hex'),
           recordCount: records.length,
@@ -162,7 +161,22 @@ export class FlatFileService {
     partner: PartnerSystem,
     now: Date,
     layoutSnapshot: object,
+    fileName: string,
   ): Promise<string | null> {
+    // One file per partner per day: serialize generators, then leave later requests for tomorrow.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`flat-file:${partner.partnerId}`}, 0))`
+    const { date } = fileStamp(now)
+    const fileDate = new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}`)
+    const existing = await tx.flatFileBatch.findFirst({
+      where: { partnerId: partner.partnerId, fileDate },
+      select: { batchId: true },
+    })
+    if (existing) {
+      this.logger.log(
+        `${partner.partnerCode} already has batch ${existing.batchId} for ${fileDate.toISOString().slice(0, 10)}; pending requests wait for the next day`,
+      )
+      return null
+    }
     const candidates = await tx.$queryRaw<{ request_id: string }[]>`
       SELECT DISTINCT request_id FROM address_change.processing_operation
       WHERE partner_id = ${partner.partnerId}::uuid AND delivery_mode = 'FLAT_FILE'
@@ -184,11 +198,11 @@ export class FlatFileService {
       SELECT MIN(received_at) AS first, MAX(received_at) AS last
       FROM address_change.address_change_request
       WHERE request_id = ANY(${batchRequestIds}::uuid[])`
-    const { date } = fileStamp(now)
     const batch = await tx.flatFileBatch.create({
       data: {
         partnerId: partner.partnerId,
-        fileDate: new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}`),
+        fileDate,
+        fileName,
         firstRequestReceivedAt: window[0]?.first,
         lastRequestReceivedAt: window[0]?.last,
         layoutSnapshot: layoutSnapshot as Prisma.InputJsonValue,
@@ -336,14 +350,13 @@ export class FlatFileService {
     const sftpClaim = await this.claimStep(batchId, 'sftp')
     const { batch } = sftpClaim
     const content = Buffer.from(batch.fileContent as Uint8Array)
-    const { date, time } = fileStamp(batch.generatedAt as Date)
 
     let remotePath: string | undefined
     let s3ObjectKey: string | undefined
     let sftpStatus: TransferResult['sftpStatus']
     if (sftpClaim.claimed) {
       try {
-        remotePath = await this.sftp.upload(batch.partner, `${date}${time}.txt`, content)
+        remotePath = await this.sftp.upload(batch.partner, batch.fileName as string, content)
         await this.prisma.$transaction((tx) => this.markSent(tx, batchId))
         sftpStatus = 'SENT'
       } catch (err) {

@@ -9,6 +9,7 @@ import type { PrismaService } from '../prisma.service'
 const partner = {
   partnerId: 'p-1',
   partnerCode: 'ICBC',
+  partnerName: 'ICBC',
   includeHeader: false,
   flatFileEncoding: 'UTF-8',
 } as PartnerSystem
@@ -59,10 +60,12 @@ function setup(
   pendingRequestIds: string[],
   operations: { id: string }[],
   rows: Record<string, unknown>[] = [sourceRow],
+  existingBatch: { batchId: string } | null = null,
 ) {
   const tx = {
     $queryRaw: vi
       .fn()
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce(pendingRequestIds.map((request_id) => ({ request_id })))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(
@@ -73,6 +76,7 @@ function setup(
       )
       .mockResolvedValueOnce([{ first: now, last: now }]),
     flatFileBatch: {
+      findFirst: vi.fn().mockResolvedValue(existingBatch),
       create: vi.fn().mockResolvedValue({ batchId: 'b-1' }),
       update: vi.fn(),
     },
@@ -98,6 +102,16 @@ function setup(
 }
 
 describe('FlatFileService.generateForPartner', () => {
+  it('leaves requests for the next day when the partner already has a batch today', async () => {
+    const { service, tx } = setup(['r-1'], [{ id: 'o-1' }], [sourceRow], { batchId: 'b-0' })
+
+    await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
+      status: 'SKIPPED',
+      batchId: null,
+    })
+    expect(tx.flatFileBatch.create).not.toHaveBeenCalled()
+  })
+
   it('skips partners with no pending operations', async () => {
     const { service, tx } = setup([], [])
     await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
@@ -117,7 +131,7 @@ describe('FlatFileService.generateForPartner', () => {
       batchId: 'b-1',
       status: 'READY',
       recordCount: 1,
-      fileName: 'ICBC.Address.20250516.191024.TXT',
+      fileName: 'acbc_requests_icbc_2025_05_16.txt',
     })
     expect(encryption.decrypt).toHaveBeenCalledWith(
       Buffer.from('encrypted'),
@@ -126,6 +140,7 @@ describe('FlatFileService.generateForPartner', () => {
     expect(tx.flatFileBatch.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          fileName: 'acbc_requests_icbc_2025_05_16.txt',
           firstRequestReceivedAt: now,
           lastRequestReceivedAt: now,
           layoutSnapshot: expect.objectContaining({ includeHeader: false, encoding: 'UTF-8' }),
@@ -231,7 +246,7 @@ describe('FlatFileService transfer', () => {
         s3ObjectKey: 'flat-files/ICBC/ICBC.Address.TXT',
       },
     ])
-    expect(sftpUpload).toHaveBeenCalledWith(partner, '20250516191024.txt', Buffer.from('x'))
+    expect(sftpUpload).toHaveBeenCalledWith(partner, 'ICBC.Address.TXT', Buffer.from('x'))
     expect(s3Upload).toHaveBeenCalledWith(
       partner.partnerCode,
       'ICBC.Address.TXT',
