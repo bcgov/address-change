@@ -27,12 +27,18 @@ export type BatchResult = {
 export type TransferResult = {
   partnerCode: string
   batchId: string
-  status: 'SENT' | 'FAILED'
+  status: 'SENT' | 'FAILED' | 'SKIPPED'
   sftpStatus: 'SENT' | 'FAILED' | 'SKIPPED'
   s3Status: 'BACKED_UP' | 'FAILED' | 'SKIPPED'
   remotePath?: string
   s3ObjectKey?: string
 }
+
+type DeliveryStep = 'sftp' | 's3'
+
+// A worker that crashed mid-step leaves its claim behind; the step becomes reclaimable after this lease.
+const claimLeaseMs = () => (Number(process.env.FLAT_FILE_CLAIM_TIMEOUT_MINUTES) || 30) * 60_000
+const s3Enabled = () => Boolean(process.env.FLAT_FILE_S3_BUCKET?.trim())
 
 type IdRow = { id: string; request_id: string }
 type RequestWindow = { first: Date | null; last: Date | null }
@@ -231,20 +237,12 @@ export class FlatFileService {
   }
 
   async transferPending(): Promise<TransferResult[]> {
-    const s3Enabled = Boolean(process.env.FLAT_FILE_S3_BUCKET?.trim())
-    const deliveryFilter = s3Enabled
-      ? {
-          status: { in: ['READY', 'SENT', 'FAILED'] },
-          OR: [
-            { status: { in: ['READY', 'FAILED'] }, transferredAt: null },
-            { s3BackedUpAt: null },
-          ],
-        }
-      : { status: { in: ['READY', 'FAILED'] }, transferredAt: null }
+    // TRANSFERRING is included so a batch orphaned by a crash is retried once its lease expires.
     const batches = await this.prisma.flatFileBatch.findMany({
       where: {
-        ...deliveryFilter,
+        status: { in: ['READY', 'TRANSFERRING', 'SENT', 'FAILED'] },
         fileContent: { not: null },
+        OR: [{ transferredAt: null }, ...(s3Enabled() ? [{ s3BackedUpAt: null }] : [])],
       },
       orderBy: { generatedAt: 'asc' },
       select: { batchId: true, partner: { select: { partnerCode: true } } },
@@ -271,91 +269,128 @@ export class FlatFileService {
     return results
   }
 
-  async transferBatch(batchId: string): Promise<Omit<TransferResult, 'partnerCode' | 'batchId'>> {
-    const claimed = await this.prisma.$transaction(async (tx) => {
+  // Only one worker owns a step at a time; the row lock makes claim-or-skip atomic.
+  private async claimStep(batchId: string, step: DeliveryStep) {
+    const now = new Date()
+    const cutoff = new Date(now.getTime() - claimLeaseMs())
+    return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT batch_id FROM address_change.flat_file_batch WHERE batch_id = ${batchId}::uuid FOR UPDATE`
       const batch = await tx.flatFileBatch.findUniqueOrThrow({
         where: { batchId },
         include: { partner: true },
       })
       if (
-        !['READY', 'SENT', 'FAILED'].includes(batch.status) ||
+        !['READY', 'TRANSFERRING', 'SENT', 'FAILED'].includes(batch.status) ||
         !batch.fileName ||
         !batch.fileContent
       ) {
         throw new Error(`Batch ${batchId} is not a generated batch awaiting delivery`)
       }
-      const sendSftp = !batch.transferredAt
-      const backupS3 = Boolean(process.env.FLAT_FILE_S3_BUCKET?.trim()) && !batch.s3BackedUpAt
-      if (!sendSftp && !backupS3)
-        throw new Error(`Batch ${batchId} has already been delivered and archived`)
-      if (sendSftp) {
-        await tx.flatFileBatch.update({
-          where: { batchId },
-          data: { status: 'TRANSFERRING', updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR },
-        })
+      const done = step === 'sftp' ? batch.transferredAt : batch.s3BackedUpAt
+      const claimedAt = step === 'sftp' ? batch.sftpClaimedAt : batch.s3ClaimedAt
+      if (done || (claimedAt && claimedAt > cutoff)) return { batch, claimed: false }
+      if (claimedAt) {
+        this.logger.warn(
+          `Recovering expired ${step} claim on batch ${batchId} from ${claimedAt.toISOString()}`,
+        )
       }
-      return { batch, sendSftp, backupS3 }
+      const audit = { updatedAt: now, updatedBy: FLAT_FILE_ACTOR }
+      await tx.flatFileBatch.update({
+        where: { batchId },
+        data:
+          step === 'sftp'
+            ? {
+                ...audit,
+                status: 'TRANSFERRING',
+                sftpClaimedAt: now,
+                sftpLastAttemptAt: now,
+                sftpAttemptCount: { increment: 1 },
+              }
+            : {
+                ...audit,
+                s3ClaimedAt: now,
+                s3LastAttemptAt: now,
+                s3AttemptCount: { increment: 1 },
+              },
+      })
+      return { batch, claimed: true }
     })
+  }
 
-    const { batch, sendSftp, backupS3 } = claimed
+  private async recordFailure(batchId: string, step: DeliveryStep, err: unknown): Promise<void> {
+    const error = err as Error
+    const code = (error as { code?: string }).code ?? `${step.toUpperCase()}_ERROR`
+    const message = `${code}: ${error.message}`.slice(0, 500)
+    this.logger.error(`${step.toUpperCase()} step of batch ${batchId} failed (${message})`)
+    const audit = { updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR }
+    await this.prisma.flatFileBatch.update({
+      where: { batchId },
+      data:
+        step === 'sftp'
+          ? { ...audit, status: 'FAILED', sftpClaimedAt: null, sftpLastError: message }
+          : { ...audit, s3ClaimedAt: null, s3LastError: message },
+    })
+  }
+
+  async transferBatch(batchId: string): Promise<Omit<TransferResult, 'partnerCode' | 'batchId'>> {
+    const sftpClaim = await this.claimStep(batchId, 'sftp')
+    const { batch } = sftpClaim
     const content = Buffer.from(batch.fileContent as Uint8Array)
     const { date, time } = fileStamp(batch.generatedAt as Date)
 
     let remotePath: string | undefined
     let s3ObjectKey: string | undefined
-    let sftpStatus: TransferResult['sftpStatus'] = 'SKIPPED'
-    let s3Status: TransferResult['s3Status'] = 'SKIPPED'
-    if (sendSftp) {
+    let sftpStatus: TransferResult['sftpStatus']
+    if (sftpClaim.claimed) {
       try {
         remotePath = await this.sftp.upload(batch.partner, `${date}${time}.txt`, content)
-        sftpStatus = 'SENT'
         await this.prisma.$transaction((tx) => this.markSent(tx, batchId))
+        sftpStatus = 'SENT'
       } catch (err) {
         sftpStatus = 'FAILED'
-        const error = err as Error
-        const code = (error as { code?: string }).code ?? 'SFTP_ERROR'
-        this.logger.error(`SFTP transfer of batch ${batchId} failed (${code}): ${error.message}`)
-        await this.prisma.flatFileBatch.update({
-          where: { batchId },
-          data: { status: 'FAILED', updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR },
-        })
+        await this.recordFailure(batchId, 'sftp', err)
       }
     } else {
-      sftpStatus = 'SENT'
+      sftpStatus = batch.transferredAt ? 'SENT' : 'SKIPPED'
     }
 
-    // Archive only files already delivered; a failed SFTP leaves S3 untouched.
-    if (backupS3 && sftpStatus === 'SENT') {
-      try {
-        s3ObjectKey = await this.s3.upload(
-          batch.partner.partnerCode,
-          batch.fileName as string,
-          content,
-          batch.checksum as string,
-        )
+    // Archive only files already delivered; a failed or in-progress SFTP leaves S3 untouched.
+    let s3Status: TransferResult['s3Status'] = batch.s3BackedUpAt ? 'BACKED_UP' : 'SKIPPED'
+    if (s3Enabled() && sftpStatus === 'SENT' && !batch.s3BackedUpAt) {
+      const s3Claim = await this.claimStep(batchId, 's3')
+      if (s3Claim.claimed) {
+        try {
+          s3ObjectKey = await this.s3.upload(
+            batch.partner.partnerCode,
+            batch.fileName as string,
+            content,
+            batch.checksum as string,
+          )
+          const now = new Date()
+          await this.prisma.flatFileBatch.update({
+            where: { batchId },
+            data: {
+              s3BackedUpAt: now,
+              s3ObjectKey,
+              s3ClaimedAt: null,
+              s3LastError: null,
+              updatedAt: now,
+              updatedBy: FLAT_FILE_ACTOR,
+            },
+          })
+          s3Status = 'BACKED_UP'
+        } catch (err) {
+          s3Status = 'FAILED'
+          await this.recordFailure(batchId, 's3', err)
+        }
+      } else if (s3Claim.batch.s3BackedUpAt) {
         s3Status = 'BACKED_UP'
-        await this.prisma.flatFileBatch.update({
-          where: { batchId },
-          data: {
-            s3BackedUpAt: new Date(),
-            s3ObjectKey,
-            updatedAt: new Date(),
-            updatedBy: FLAT_FILE_ACTOR,
-          },
-        })
-      } catch (err) {
-        s3Status = 'FAILED'
-        const error = err as Error
-        const code = (error as { code?: string }).code ?? 'S3_ERROR'
-        this.logger.error(`S3 backup of batch ${batchId} failed (${code}): ${error.message}`)
       }
-    } else if (!backupS3) {
-      s3Status = batch.s3BackedUpAt ? 'BACKED_UP' : 'SKIPPED'
     }
 
+    const failed = sftpStatus === 'FAILED' || s3Status === 'FAILED'
     return {
-      status: sftpStatus === 'SENT' && s3Status !== 'FAILED' ? 'SENT' : 'FAILED',
+      status: failed ? 'FAILED' : sftpStatus === 'SENT' ? 'SENT' : 'SKIPPED',
       sftpStatus,
       s3Status,
       ...(remotePath ? { remotePath } : {}),
@@ -377,7 +412,14 @@ export class FlatFileService {
 
     await tx.flatFileBatch.update({
       where: { batchId },
-      data: { status: 'SENT', transferredAt: now, updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
+      data: {
+        status: 'SENT',
+        transferredAt: now,
+        sftpClaimedAt: null,
+        sftpLastError: null,
+        updatedAt: now,
+        updatedBy: FLAT_FILE_ACTOR,
+      },
     })
     await tx.processingOperation.updateMany({
       where: { batchId },

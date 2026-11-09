@@ -297,6 +297,71 @@ describe('FlatFileService transfer', () => {
     expect(s3Upload).toHaveBeenCalledOnce()
   })
 
+  it('records attempts and the last error independently per step', async () => {
+    const sftpUpload = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('refused'), { code: 'ECONNREFUSED' }))
+    const { service, tx, prisma } = setupTransfer(sftpUpload, vi.fn())
+
+    await service.transferBatch('b-1')
+
+    expect(tx.flatFileBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'TRANSFERRING',
+          sftpAttemptCount: { increment: 1 },
+        }),
+      }),
+    )
+    expect(prisma.flatFileBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          sftpClaimedAt: null,
+          sftpLastError: 'ECONNREFUSED: refused',
+        }),
+      }),
+    )
+    expect(prisma.flatFileBatch.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ s3LastError: expect.anything() }),
+      }),
+    )
+  })
+
+  it('does not process a step another worker claimed within the lease', async () => {
+    const sftpUpload = vi.fn()
+    const s3Upload = vi.fn()
+    const { service } = setupTransfer(sftpUpload, s3Upload, {
+      status: 'TRANSFERRING',
+      sftpClaimedAt: new Date(),
+    })
+
+    await expect(service.transferBatch('b-1')).resolves.toMatchObject({
+      status: 'SKIPPED',
+      sftpStatus: 'SKIPPED',
+      s3Status: 'SKIPPED',
+    })
+    expect(sftpUpload).not.toHaveBeenCalled()
+    expect(s3Upload).not.toHaveBeenCalled()
+  })
+
+  it('recovers a batch left TRANSFERRING by a crashed worker once its claim expires', async () => {
+    const sftpUpload = vi.fn().mockResolvedValue('/inbound/ICBC/20250516191024.txt')
+    const s3Upload = vi.fn().mockResolvedValue('flat-files/ICBC/file.txt')
+    const { service } = setupTransfer(sftpUpload, s3Upload, {
+      status: 'TRANSFERRING',
+      sftpClaimedAt: new Date(Date.now() - 31 * 60_000),
+    })
+
+    await expect(service.transferBatch('b-1')).resolves.toMatchObject({
+      status: 'SENT',
+      sftpStatus: 'SENT',
+      s3Status: 'BACKED_UP',
+    })
+    expect(sftpUpload).toHaveBeenCalledOnce()
+  })
+
   it('skips S3 and succeeds locally when the bucket environment variable is unset', async () => {
     vi.stubEnv('FLAT_FILE_S3_BUCKET', '')
     const sftpUpload = vi.fn().mockResolvedValue('/inbound/ICBC/20250516191024.txt')

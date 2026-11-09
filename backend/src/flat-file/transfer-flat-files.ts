@@ -15,7 +15,7 @@ async function main(): Promise<boolean> {
         `${result.partnerCode}: ${result.status} batch=${result.batchId} sftp=${result.sftpStatus} remote=${result.remotePath ?? '-'} s3=${result.s3Status} object=${result.s3ObjectKey ?? '-'}`,
       )
     }
-    return results.every((r) => r.status === 'SENT')
+    return results.every((r) => r.status !== 'FAILED')
   } finally {
     await app.close()
   }
