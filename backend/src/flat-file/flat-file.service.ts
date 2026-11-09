@@ -301,31 +301,19 @@ export class FlatFileService {
     const { batch, sendSftp, backupS3 } = claimed
     const content = Buffer.from(batch.fileContent as Uint8Array)
     const { date, time } = fileStamp(batch.generatedAt as Date)
-    const sftpPromise = sendSftp
-      ? this.sftp.upload(batch.partner, `${date}${time}.txt`, content)
-      : Promise.resolve(undefined)
-    const s3Promise = backupS3
-      ? this.s3.upload(
-          batch.partner.partnerCode,
-          batch.fileName as string,
-          content,
-          batch.checksum as string,
-        )
-      : Promise.resolve(undefined)
-    const [sftpResult, s3Result] = await Promise.allSettled([sftpPromise, s3Promise])
 
     let remotePath: string | undefined
     let s3ObjectKey: string | undefined
     let sftpStatus: TransferResult['sftpStatus'] = 'SKIPPED'
     let s3Status: TransferResult['s3Status'] = 'SKIPPED'
     if (sendSftp) {
-      if (sftpResult.status === 'fulfilled') {
-        remotePath = sftpResult.value
+      try {
+        remotePath = await this.sftp.upload(batch.partner, `${date}${time}.txt`, content)
         sftpStatus = 'SENT'
         await this.prisma.$transaction((tx) => this.markSent(tx, batchId))
-      } else {
+      } catch (err) {
         sftpStatus = 'FAILED'
-        const error = sftpResult.reason as Error
+        const error = err as Error
         const code = (error as { code?: string }).code ?? 'SFTP_ERROR'
         this.logger.error(`SFTP transfer of batch ${batchId} failed (${code}): ${error.message}`)
         await this.prisma.flatFileBatch.update({
@@ -334,12 +322,18 @@ export class FlatFileService {
         })
       }
     } else {
-      sftpStatus = batch.transferredAt ? 'SENT' : 'FAILED'
+      sftpStatus = 'SENT'
     }
 
-    if (backupS3) {
-      if (s3Result.status === 'fulfilled') {
-        s3ObjectKey = s3Result.value
+    // Archive only files already delivered; a failed SFTP leaves S3 untouched.
+    if (backupS3 && sftpStatus === 'SENT') {
+      try {
+        s3ObjectKey = await this.s3.upload(
+          batch.partner.partnerCode,
+          batch.fileName as string,
+          content,
+          batch.checksum as string,
+        )
         s3Status = 'BACKED_UP'
         await this.prisma.flatFileBatch.update({
           where: { batchId },
@@ -350,13 +344,13 @@ export class FlatFileService {
             updatedBy: FLAT_FILE_ACTOR,
           },
         })
-      } else {
+      } catch (err) {
         s3Status = 'FAILED'
-        const error = s3Result.reason as Error
+        const error = err as Error
         const code = (error as { code?: string }).code ?? 'S3_ERROR'
         this.logger.error(`S3 backup of batch ${batchId} failed (${code}): ${error.message}`)
       }
-    } else {
+    } else if (!backupS3) {
       s3Status = batch.s3BackedUpAt ? 'BACKED_UP' : 'SKIPPED'
     }
 

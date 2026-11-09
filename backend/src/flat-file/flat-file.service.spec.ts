@@ -267,16 +267,33 @@ describe('FlatFileService transfer', () => {
     expect(sftpUpload).not.toHaveBeenCalled()
   })
 
-  it('still backs up to S3 when the SFTP upload fails', async () => {
+  it('skips the S3 archive when the SFTP upload fails', async () => {
     const sftpUpload = vi.fn().mockRejectedValue(new Error('SFTP unavailable'))
-    const s3Upload = vi.fn().mockResolvedValue('flat-files/ICBC/file.txt')
+    const s3Upload = vi.fn()
     const { service } = setupTransfer(sftpUpload, s3Upload)
 
     await expect(service.transferBatch('b-1')).resolves.toMatchObject({
       status: 'FAILED',
       sftpStatus: 'FAILED',
+      s3Status: 'SKIPPED',
+    })
+    expect(s3Upload).not.toHaveBeenCalled()
+  })
+
+  it('archives to S3 on a later run without resending an already delivered file', async () => {
+    const sftpUpload = vi.fn()
+    const s3Upload = vi.fn().mockResolvedValue('flat-files/ICBC/file.txt')
+    const { service } = setupTransfer(sftpUpload, s3Upload, {
+      status: 'SENT',
+      transferredAt: now,
+    })
+
+    await expect(service.transferBatch('b-1')).resolves.toMatchObject({
+      status: 'SENT',
+      sftpStatus: 'SENT',
       s3Status: 'BACKED_UP',
     })
+    expect(sftpUpload).not.toHaveBeenCalled()
     expect(s3Upload).toHaveBeenCalledOnce()
   })
 
