@@ -22,11 +22,21 @@ BEGIN
   END IF;
   SELECT partner_id INTO STRICT icbc FROM address_change.partner_system WHERE partner_code = 'ICBC';
   SELECT partner_id INTO STRICT health FROM address_change.partner_system WHERE partner_code = 'HEALTH';
+  IF NOT EXISTS (
+    SELECT 1 FROM address_change.partner_flat_file_column
+    WHERE partner_id = icbc AND field_key = 'new_postal_code' AND enabled
+  ) OR NOT EXISTS (
+    SELECT 1 FROM address_change.partner_flat_file_column
+    WHERE partner_id = health AND field_key = 'phn' AND enabled
+  ) THEN
+    RAISE EXCEPTION 'Partner flat-file layouts were not seeded';
+  END IF;
   INSERT INTO address_change.address_change_request
     (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date, created_by, updated_by)
     VALUES (r, test_owner, 'submission-1', decode('0102', 'hex'), current_date, 'test', 'test');
-  INSERT INTO address_change.request_person(request_id, first_name, last_name, date_of_birth)
-    VALUES (r, unicode_name, 'Test', date '1990-01-01');
+  INSERT INTO address_change.request_person
+    (request_id, first_name, first_middle_initial, second_middle_initial, last_name, date_of_birth)
+    VALUES (r, unicode_name, 'J', 'K', 'Test', date '1990-01-01');
   INSERT INTO address_change.submitted_address
     (request_id, old_address_line_one, old_city, old_province, old_postal_code, old_country,
      new_address_line_one, new_city, new_province, new_postal_code, new_country, is_mailing_address_same)
@@ -58,6 +68,16 @@ BEGIN
       AND mailing_postal_code = 'V3C 2C4' AND mailing_country = 'CA'
       AND convert_to(new_address_line_one, 'UTF8') = convert_to(unicode_name, 'UTF8')) THEN
     RAISE EXCEPTION 'Separate mailing/residential addresses did not round-trip';
+  END IF;
+  UPDATE address_change.submitted_address
+    SET old_address_flag = 'Y', old_unit_number = 'Suite 2', old_street_number = '42',
+        old_street_name = 'Cedar', new_address_flag = 'Y', new_street_number = '99',
+        new_street_name = 'Maple'
+    WHERE request_id = r;
+  IF NOT EXISTS (SELECT 1 FROM address_change.flat_file_source
+    WHERE request_id = r AND middle_initials = 'J K' AND old_unit_number = 'Suite 2'
+      AND old_street_number = '42' AND new_postal_code = 'V0A 0A0') THEN
+    RAISE EXCEPTION 'Flat-file source view did not expose derived or structured values';
   END IF;
   INSERT INTO address_change.processing_operation(request_id, partner_id, delivery_mode)
     VALUES (r, icbc, 'FLAT_FILE') RETURNING operation_id INTO op;

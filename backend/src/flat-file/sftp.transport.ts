@@ -14,6 +14,10 @@ export class SftpHostKeyMismatchError extends Error {
   readonly code = 'SFTP_HOST_KEY_MISMATCH'
 }
 
+export class SftpRemoteFileConflictError extends Error {
+  readonly code = 'SFTP_REMOTE_FILE_CONFLICT'
+}
+
 // Local development only; never set in OpenShift.
 export const SFTP_ALLOW_UNVERIFIED_HOST_KEY_ENV = 'SFTP_ALLOW_UNVERIFIED_HOST_KEY'
 
@@ -58,6 +62,7 @@ type PartnerSftpSettings = Pick<
   | 'sftpKeyPath'
   | 'sftpRemoteDirectory'
   | 'sftpHostKeyFingerprints'
+  | 'sftpUseTempFile'
 >
 
 @Injectable()
@@ -131,7 +136,24 @@ export class SftpTransport {
       if (!(await client.exists(target.remoteDir))) {
         await client.mkdir(target.remoteDir, true)
       }
-      await client.put(content, target.remotePath)
+      if (partner.sftpUseTempFile) {
+        // A file under the final name is always complete, so an equal-size match means it was already sent.
+        const existing = await client.exists(target.remotePath)
+        if (existing) {
+          if (existing === '-' && (await client.stat(target.remotePath)).size === content.length) {
+            this.logger.log(`${target.remotePath} already exists; not resending`)
+            return target.remotePath
+          }
+          throw new SftpRemoteFileConflictError(
+            `${target.remotePath} already exists and differs from this batch`,
+          )
+        }
+        const partialPath = `${target.remotePath}.part`
+        await client.put(content, partialPath)
+        await client.rename(partialPath, target.remotePath)
+      } else {
+        await client.put(content, target.remotePath)
+      }
     } finally {
       // end() rejects when connect() never succeeded; keep the original error.
       await client.end().catch(() => undefined)
