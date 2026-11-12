@@ -94,6 +94,9 @@ parameters:
   - name: ALLOW_DATA_RESET
     description: Enables the resident self-service data deletion route; must be "false" in production
     value: "false"
+  - name: FLAT_FILE_JOB_SUSPEND
+    description: Set false only in environments configured for partner deliveries
+    value: "true"
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -200,7 +203,7 @@ objects:
               ports:
                 - name: http
                   containerPort: 3000
-              env:
+              env: &backend-environment
                 - name: LOG_LEVEL
                   value: ${LOG_LEVEL}
                 - name: POSTGRES_HOST
@@ -309,6 +312,62 @@ objects:
               emptyDir:
                 medium: Memory
                 sizeLimit: 256Mi
+  - apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      name: ${NAME}-${ZONE}-flat-files
+      labels:
+        app: ${NAME}-${ZONE}
+    spec:
+      schedule: "0 19-23 * * *"
+      timeZone: America/Vancouver
+      suspend: ${{FLAT_FILE_JOB_SUSPEND}}
+      concurrencyPolicy: Forbid
+      startingDeadlineSeconds: 300
+      successfulJobsHistoryLimit: 1
+      failedJobsHistoryLimit: 5
+      jobTemplate:
+        spec:
+          backoffLimit: 0
+          activeDeadlineSeconds: 1200
+          ttlSecondsAfterFinished: 86400
+          template:
+            metadata:
+              labels:
+                app: ${NAME}-${ZONE}
+                database-client: ${DB_CLIENT}
+            spec:
+              restartPolicy: Never
+              terminationGracePeriodSeconds: 30
+              automountServiceAccountToken: false
+              containers:
+                - name: flat-files
+                  image: ${REGISTRY}/${ORG_NAME}/${NAME}/${COMPONENT}:${IMAGE_TAG}
+                  imagePullPolicy: Always
+                  command: ["node", "/app/dist/flat-file/run-flat-files.js"]
+                  env: *backend-environment
+                  resources:
+                    requests:
+                      cpu: ${CPU_REQUEST}
+                      memory: ${MEMORY_REQUEST}
+                    limits:
+                      memory: ${MEMORY_LIMIT}
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    runAsNonRoot: true
+                    readOnlyRootFilesystem: true
+                    capabilities:
+                      drop: ["ALL"]
+                    seccompProfile:
+                      type: RuntimeDefault
+                  volumeMounts:
+                    - name: tmp
+                      mountPath: /tmp
+              volumes:
+                - name: tmp
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 256Mi
   - apiVersion: v1
     kind: Service
     metadata:
