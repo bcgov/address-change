@@ -1,0 +1,24 @@
+---
+title: Test S3 object storage access
+description: Verify configured object-storage credentials with an upload, download, content check, and cleanup.
+---
+
+Use the backend's `s3:test-upload` command to verify that the configured object-storage credentials can complete a full round trip. It creates a cryptographically random text payload and unique object name, uploads it, downloads it, compares the downloaded bytes with the original payload, and deletes the temporary object. Success is reported only if the comparison and deletion complete. If verification fails, the command exits with an error; if download or verification fails, it still attempts to delete the temporary object.
+
+## Required configuration
+
+Provide these environment variables from an approved local secret source or the environment-specific OpenShift Secret named `address-change-s3`:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `FLAT_FILE_S3_BUCKET`
+- `FLAT_FILE_S3_ENDPOINT` (for the BC Gov Object Storage endpoint)
+- `AWS_REGION` (optional; the application defaults to `ca-central-1` when empty or unset)
+
+Do not put credentials in this documentation, source control, or command-line arguments. Rotate any credentials that have been exposed and use the replacement values in the Secret.
+
+## Run the test
+
+From `backend/`, build the application once, then run `npm run s3:test-upload` in a shell where the variables above are available. The command uploads to `flat-files/connectivity-test/` and prints the object URI after successful verification and cleanup. It does not access the database or SFTP. No real credentials or network upload are used by its unit tests.
+
+The command uses the same S3 transport and configuration as flat-file archival, so it checks the application's actual upload, download, and delete permissions. The identity needs permission to put, get, and delete objects in the configured test bucket/prefix.
