@@ -108,10 +108,7 @@ describe('FlatFileService.generateForPartner', () => {
     await service.generateForPartner(partner, now)
 
     expect(tx.$executeRaw).toHaveBeenCalledExactlyOnceWith(
-      expect.arrayContaining([
-        'SELECT pg_advisory_xact_lock(hashtextextended(',
-        ', 0))',
-      ]),
+      expect.arrayContaining(['SELECT pg_advisory_xact_lock(hashtextextended(', ', 0))']),
       'flat-file:p-1',
     )
     expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
