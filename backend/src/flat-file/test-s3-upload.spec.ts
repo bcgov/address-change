@@ -3,11 +3,11 @@ import { uploadTestFile } from './test-s3-upload'
 
 describe('uploadTestFile', () => {
   it('uploads random text, downloads and verifies it, then deletes the test object', async () => {
-    const upload = vi.fn().mockResolvedValue('flat-files/connectivity-test/test.txt')
+    const upload = vi.fn().mockResolvedValue('address_change/flat-files/connectivity-test/test.txt')
     const download = vi.fn(async () => upload.mock.calls[0]?.[2] as Buffer)
     const remove = vi.fn().mockResolvedValue(undefined)
     await expect(uploadTestFile({ upload, download, delete: remove })).resolves.toBe(
-      'flat-files/connectivity-test/test.txt',
+      'address_change/flat-files/connectivity-test/test.txt',
     )
     const content = upload.mock.calls[0]?.[2] as Buffer
     expect(content.toString()).toMatch(/^[a-f0-9]{64}\r\n$/)
@@ -17,8 +17,8 @@ describe('uploadTestFile', () => {
       content,
       createHash('sha256').update(content).digest('hex'),
     )
-    expect(download).toHaveBeenCalledWith('flat-files/connectivity-test/test.txt')
-    expect(remove).toHaveBeenCalledWith('flat-files/connectivity-test/test.txt')
+    expect(download).toHaveBeenCalledWith('address_change/flat-files/connectivity-test/test.txt')
+    expect(remove).toHaveBeenCalledWith('address_change/flat-files/connectivity-test/test.txt')
   })
 
   it('deletes the uploaded object if download fails', async () => {

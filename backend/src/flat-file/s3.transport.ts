@@ -40,7 +40,7 @@ export class S3Transport {
   ): Promise<string> {
     const bucket = this.getBucket()
 
-    const objectKey = `flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
+    const objectKey = `address_change/flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
     await this.getClient().send(
       new PutObjectCommand({
         Bucket: bucket,

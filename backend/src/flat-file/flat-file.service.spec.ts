@@ -232,7 +232,7 @@ describe('FlatFileService transfer', () => {
 
   it('delivers the exact same bytes to SFTP and S3, recording each timestamp independently', async () => {
     const sftpUpload = vi.fn().mockResolvedValue('/inbound/ICBC/20250516191024.txt')
-    const s3Upload = vi.fn().mockResolvedValue('flat-files/ICBC/ICBC.Address.TXT')
+    const s3Upload = vi.fn().mockResolvedValue('address_change/flat-files/ICBC/ICBC.Address.TXT')
     const { service, prisma, tx } = setupTransfer(sftpUpload, s3Upload)
 
     await expect(service.transferPending()).resolves.toEqual([
@@ -243,7 +243,7 @@ describe('FlatFileService transfer', () => {
         sftpStatus: 'SENT',
         s3Status: 'BACKED_UP',
         remotePath: '/inbound/ICBC/20250516191024.txt',
-        s3ObjectKey: 'flat-files/ICBC/ICBC.Address.TXT',
+        s3ObjectKey: 'address_change/flat-files/ICBC/ICBC.Address.TXT',
       },
     ])
     expect(sftpUpload).toHaveBeenCalledWith(partner, 'ICBC.Address.TXT', Buffer.from('x'))
@@ -255,7 +255,9 @@ describe('FlatFileService transfer', () => {
     )
     expect(prisma.flatFileBatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ s3ObjectKey: 'flat-files/ICBC/ICBC.Address.TXT' }),
+        data: expect.objectContaining({
+          s3ObjectKey: 'address_change/flat-files/ICBC/ICBC.Address.TXT',
+        }),
       }),
     )
     expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
@@ -297,7 +299,7 @@ describe('FlatFileService transfer', () => {
 
   it('archives to S3 on a later run without resending an already delivered file', async () => {
     const sftpUpload = vi.fn()
-    const s3Upload = vi.fn().mockResolvedValue('flat-files/ICBC/file.txt')
+    const s3Upload = vi.fn().mockResolvedValue('address_change/flat-files/ICBC/file.txt')
     const { service } = setupTransfer(sftpUpload, s3Upload, {
       status: 'SENT',
       transferredAt: now,
@@ -363,7 +365,7 @@ describe('FlatFileService transfer', () => {
 
   it('recovers a batch left TRANSFERRING by a crashed worker once its claim expires', async () => {
     const sftpUpload = vi.fn().mockResolvedValue('/inbound/ICBC/20250516191024.txt')
-    const s3Upload = vi.fn().mockResolvedValue('flat-files/ICBC/file.txt')
+    const s3Upload = vi.fn().mockResolvedValue('address_change/flat-files/ICBC/file.txt')
     const { service } = setupTransfer(sftpUpload, s3Upload, {
       status: 'TRANSFERRING',
       sftpClaimedAt: new Date(Date.now() - 31 * 60_000),

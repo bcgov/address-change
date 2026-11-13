@@ -19,6 +19,6 @@ Do not put credentials in this documentation, source control, or command-line ar
 
 ## Run the test
 
-From `backend/`, build the application once, then run `npm run s3:test-upload` in a shell where the variables above are available. The command uploads to `flat-files/connectivity-test/` and prints the object URI after successful verification and cleanup. It does not access the database or SFTP. No real credentials or network upload are used by its unit tests.
+From `backend/`, build the application once, then run `npm run s3:test-upload` in a shell where the variables above are available. The command uploads under `address_change/flat-files/connectivity-test/` and prints the object URI after successful verification and cleanup. It does not access the database or SFTP. No real credentials or network upload are used by its unit tests.
 
 The command uses the same S3 transport and configuration as flat-file archival, so it checks the application's actual upload, download, and delete permissions. The identity needs permission to put, get, and delete objects in the configured test bucket/prefix.
