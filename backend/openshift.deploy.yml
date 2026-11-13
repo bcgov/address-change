@@ -338,6 +338,7 @@ objects:
             metadata:
               labels:
                 app: ${NAME}-${ZONE}
+                worker: ${NAME}-${ZONE}-flat-files
                 database-client: ${DB_CLIENT}
             spec:
               restartPolicy: Never
