@@ -68,6 +68,7 @@ SELECT
   person.first_name,
   person.last_name,
   r.received_at,
+  MIN(o.created_at) OVER (PARTITION BY r.request_id) AS submitted_at,
   r.effective_date,
   r.status AS request_status,
   r.updated_at AS request_updated_at,
@@ -113,6 +114,10 @@ COMMENT ON VIEW address_change.address_change_status IS
   'One row per submitted request/selected partner, including submitted first/last names (personal information). Requests without operations or person snapshots remain visible. DRAFTs excluded. Stored outcomes are not recomputed. Flat-file and API partner columns are populated only for their respective delivery mode; API columns do not imply an implemented API integration. No encrypted payloads.';
 COMMENT ON COLUMN address_change.address_change_status.delivery_mode IS
   'Delivery mode recorded on the operation, not the current partner configuration: FLAT_FILE or REALTIME (API).';
+COMMENT ON COLUMN address_change.address_change_status.received_at IS
+  'Original request received time; may be when a draft was saved, not when it was submitted. Use submitted_at to filter submissions.';
+COMMENT ON COLUMN address_change.address_change_status.submitted_at IS
+  'Earliest processing_operation.created_at across all selected partners for this request, matching AddressChangeService.list(). NULL when no operations exist.';
 COMMENT ON COLUMN address_change.address_change_status.api_attempt_status IS
   'Latest API attempt by attempt_number, including an in-flight retry. NULL before any attempt or for flat-file operations; api_partner_sync_status is the authoritative API operation outcome.';
 COMMENT ON COLUMN address_change.address_change_status.flat_file_delivery_status IS

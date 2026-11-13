@@ -91,9 +91,28 @@ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM address_change.address_change_status
     WHERE request_id = request AND request_status = 'SUBMITTED'
-      AND operation_id IS NULL AND flat_file_partner_sync_status IS NULL
+      AND operation_id IS NULL AND submitted_at IS NULL AND flat_file_partner_sync_status IS NULL
       AND api_partner_sync_status IS NULL AND first_name IS NULL AND last_name IS NULL) THEN
     RAISE EXCEPTION 'Submitted requests without operations must remain visible';
+  END IF;
+
+  -- A Monday draft submitted Friday retains its original received_at. Every
+  -- partner row must expose Friday's earliest operation time as submitted_at.
+  UPDATE address_change.address_change_request
+    SET received_at = timestamptz '2026-11-09 09:00:00+00', status = 'SUBMITTED'
+    WHERE request_id = draft;
+  INSERT INTO address_change.processing_operation
+    (request_id, partner_id, delivery_mode, created_at)
+    VALUES
+      (draft, icbc, 'FLAT_FILE', timestamptz '2026-11-13 10:00:01+00'),
+      (draft, health, 'REALTIME', timestamptz '2026-11-13 10:00:00+00');
+  IF (SELECT count(*) FROM address_change.address_change_status
+    WHERE request_id = draft
+      AND received_at = timestamptz '2026-11-09 09:00:00+00'
+      AND submitted_at = timestamptz '2026-11-13 10:00:00+00'
+      AND submitted_at >= timestamptz '2026-11-13 00:00:00+00'
+      AND submitted_at < timestamptz '2026-11-14 00:00:00+00') <> 2 THEN
+    RAISE EXCEPTION 'Friday submission filter missed a Monday draft or used a per-partner timestamp';
   END IF;
 
   INSERT INTO address_change.request_person (request_id, first_name, last_name, date_of_birth)
