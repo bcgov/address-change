@@ -196,6 +196,7 @@ jobs:
               -p OIDC_JWKS_URI="${{ vars.OIDC_JWKS_URI }}"
               -p OIDC_SUBMISSION_SCOPE="${{ vars.OIDC_SUBMISSION_SCOPE }}"
               -p ENCRYPTION_KEY_ID="${{ vars.ENCRYPTION_KEY_ID }}"
+              -p FLAT_FILE_JOB_SUSPEND="${{ vars.FLAT_FILE_JOB_SUSPEND || 'true' }}"
               -p ALLOW_DATA_RESET="${{ inputs.environment != 'prod' && 'true' || 'false' }}"
           - name: frontend
             file: frontend/openshift.deploy.yml
