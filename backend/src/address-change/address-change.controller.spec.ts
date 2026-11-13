@@ -68,7 +68,7 @@ describe('AddressChange intake HTTP + SQL integration', () => {
     const migrations = resolve('..', 'migrations/sql')
     for (const file of readdirSync(migrations)
       .filter((name) => name.endsWith('.sql'))
-      .sort()) {
+      .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }))) {
       await pg.exec(readFileSync(resolve(migrations, file), 'utf8'))
     }
     const database = {

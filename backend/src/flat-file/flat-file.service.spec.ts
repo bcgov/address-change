@@ -63,9 +63,9 @@ function setup(
   existingBatch: { batchId: string } | null = null,
 ) {
   const tx = {
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi
       .fn()
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce(pendingRequestIds.map((request_id) => ({ request_id })))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(
@@ -102,6 +102,23 @@ function setup(
 }
 
 describe('FlatFileService.generateForPartner', () => {
+  it('executes the transaction advisory lock without deserializing its void result', async () => {
+    const { service, tx } = setup([], [])
+
+    await service.generateForPartner(partner, now)
+
+    expect(tx.$executeRaw).toHaveBeenCalledExactlyOnceWith(
+      expect.arrayContaining([
+        'SELECT pg_advisory_xact_lock(hashtextextended(',
+        ', 0))',
+      ]),
+      'flat-file:p-1',
+    )
+    expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.flatFileBatch.findFirst.mock.invocationCallOrder[0]!,
+    )
+  })
+
   it('leaves requests for the next day when the partner already has a batch today', async () => {
     const { service, tx } = setup(['r-1'], [{ id: 'o-1' }], [sourceRow], { batchId: 'b-0' })
 
