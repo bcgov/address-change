@@ -128,14 +128,17 @@ export class FlatFileService {
         formatFlatFile(records, columns, partner.includeHeader),
         partner.flatFileEncoding,
       )
+      const checksum = createHash('sha256').update(content).digest('hex')
+      // The shared job time determines file naming/date, not generation completion.
+      const generatedAt = new Date()
       await this.prisma.flatFileBatch.update({
         where: { batchId },
         data: {
           fileContent: new Uint8Array(content),
-          checksum: createHash('sha256').update(content).digest('hex'),
+          checksum,
           recordCount: records.length,
-          generatedAt: now,
-          updatedAt: now,
+          generatedAt,
+          updatedAt: generatedAt,
           updatedBy: FLAT_FILE_ACTOR,
         },
       })
