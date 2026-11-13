@@ -128,14 +128,17 @@ export class FlatFileService {
         formatFlatFile(records, columns, partner.includeHeader),
         partner.flatFileEncoding,
       )
+      const checksum = createHash('sha256').update(content).digest('hex')
+      // The shared job time determines file naming/date, not generation completion.
+      const generatedAt = new Date()
       await this.prisma.flatFileBatch.update({
         where: { batchId },
         data: {
           fileContent: new Uint8Array(content),
-          checksum: createHash('sha256').update(content).digest('hex'),
+          checksum,
           recordCount: records.length,
-          generatedAt: now,
-          updatedAt: now,
+          generatedAt,
+          updatedAt: generatedAt,
           updatedBy: FLAT_FILE_ACTOR,
         },
       })
@@ -164,7 +167,8 @@ export class FlatFileService {
     fileName: string,
   ): Promise<string | null> {
     // One file per partner per day: serialize generators, then leave later requests for tomorrow.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`flat-file:${partner.partnerId}`}, 0))`
+    // The lock function returns PostgreSQL void; execute it without deserializing a result row.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`flat-file:${partner.partnerId}`}, 0))`
     const { date } = fileStamp(now)
     const fileDate = new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}`)
     const existing = await tx.flatFileBatch.findFirst({
