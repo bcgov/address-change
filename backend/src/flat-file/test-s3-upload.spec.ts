@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { uploadTestFile } from './test-s3-upload'
+import { runS3TestCli, uploadTestFile } from './test-s3-upload'
 
 describe('uploadTestFile', () => {
   it('uploads random text, downloads and verifies it, then deletes the test object', async () => {
@@ -50,5 +50,40 @@ describe('uploadTestFile', () => {
     )
     expect(download).not.toHaveBeenCalled()
     expect(remove).not.toHaveBeenCalled()
+  })
+
+  it('prints the verified object URI and succeeds from the CLI', async () => {
+    vi.stubEnv('FLAT_FILE_S3_BUCKET', 'test-bucket')
+    const upload = vi.fn().mockResolvedValue('address_change/test.txt')
+    const download = vi.fn(async () => upload.mock.calls[0]?.[2] as Buffer)
+    const remove = vi.fn().mockResolvedValue(undefined)
+    const output = { log: vi.fn(), error: vi.fn() }
+    const setExitCode = vi.fn()
+
+    await runS3TestCli({ upload, download, delete: remove }, output, setExitCode)
+
+    expect(output.log).toHaveBeenCalledWith(
+      'S3 upload/download verification succeeded and test object was deleted: s3://test-bucket/address_change/test.txt',
+    )
+    expect(setExitCode).toHaveBeenCalledWith(0)
+    vi.unstubAllEnvs()
+  })
+
+  it('reports CLI errors and sets a failing exit code', async () => {
+    const output = { log: vi.fn(), error: vi.fn() }
+    const setExitCode = vi.fn()
+
+    await runS3TestCli(
+      {
+        upload: vi.fn().mockRejectedValue(new Error('bucket unavailable')),
+        download: vi.fn(),
+        delete: vi.fn(),
+      },
+      output,
+      setExitCode,
+    )
+
+    expect(output.error).toHaveBeenCalledWith('S3 test upload failed: bucket unavailable')
+    expect(setExitCode).toHaveBeenCalledWith(1)
   })
 })
