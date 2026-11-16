@@ -1,11 +1,15 @@
 import { randomBytes } from 'node:crypto'
+import SftpClient from 'ssh2-sftp-client'
 import { SFTP_CREDENTIAL_KEY_ENV, encryptSecret } from './sftp-credential.crypto'
 import {
   SFTP_ALLOW_UNVERIFIED_HOST_KEY_ENV,
   SftpNotConfiguredError,
+  SftpRemoteFileConflictError,
   SftpTransport,
   toSshFingerprint,
 } from './sftp.transport'
+
+vi.mock('ssh2-sftp-client')
 
 const key = randomBytes(32)
 const hostHash = randomBytes(32).toString('hex')
@@ -20,6 +24,7 @@ const partner = {
   sftpKeyPath: null,
   sftpRemoteDirectory: '/inbound',
   sftpHostKeyFingerprints: `SHA256:${'A'.repeat(43)},${fingerprint}`,
+  sftpUseTempFile: true,
 }
 
 describe('SftpTransport.resolveTarget', () => {
@@ -81,5 +86,73 @@ describe('SftpTransport.resolveTarget', () => {
     await expect(
       new SftpTransport().resolveTarget({ ...partner, sftpHost: null }, 'f.txt'),
     ).rejects.toBeInstanceOf(SftpNotConfiguredError)
+  })
+})
+
+describe('SftpTransport.upload', () => {
+  const content = Buffer.from('hello')
+  const remotePath = '/inbound/ICBC/f.txt'
+
+  function fakeClient(remote: Record<string, string> = {}, size = content.length) {
+    const fake = {
+      connect: vi.fn(),
+      exists: vi.fn(async (path: string) => remote[path] ?? false),
+      mkdir: vi.fn(),
+      stat: vi.fn(async () => ({ size })),
+      put: vi.fn(),
+      rename: vi.fn(),
+      end: vi.fn().mockResolvedValue(undefined),
+    }
+    // biome-ignore lint/complexity/useArrowFunction: the mock is invoked with `new`
+    vi.mocked(SftpClient).mockImplementation(function () {
+      return fake
+    } as never)
+    return fake
+  }
+
+  beforeEach(() => {
+    vi.stubEnv(SFTP_CREDENTIAL_KEY_ENV, key.toString('base64'))
+    vi.stubEnv(SFTP_ALLOW_UNVERIFIED_HOST_KEY_ENV, 'true')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('uploads to a .part file and renames it when complete', async () => {
+    const client = fakeClient({ '/inbound/ICBC': 'd' })
+
+    await expect(new SftpTransport().upload(partner, 'f.txt', content)).resolves.toBe(remotePath)
+
+    expect(client.put).toHaveBeenCalledWith(content, `${remotePath}.part`)
+    expect(client.rename).toHaveBeenCalledWith(`${remotePath}.part`, remotePath)
+  })
+
+  it('does not resend when the final file already exists with the same size', async () => {
+    const client = fakeClient({ '/inbound/ICBC': 'd', [remotePath]: '-' })
+
+    await expect(new SftpTransport().upload(partner, 'f.txt', content)).resolves.toBe(remotePath)
+
+    expect(client.put).not.toHaveBeenCalled()
+    expect(client.rename).not.toHaveBeenCalled()
+  })
+
+  it('refuses to overwrite an existing file of a different size', async () => {
+    const client = fakeClient({ '/inbound/ICBC': 'd', [remotePath]: '-' }, content.length + 1)
+
+    await expect(new SftpTransport().upload(partner, 'f.txt', content)).rejects.toBeInstanceOf(
+      SftpRemoteFileConflictError,
+    )
+    expect(client.put).not.toHaveBeenCalled()
+  })
+
+  it('uploads straight to the final name, overwriting, when temp files are disabled', async () => {
+    const client = fakeClient({ '/inbound/ICBC': 'd', [remotePath]: '-' })
+
+    await new SftpTransport().upload({ ...partner, sftpUseTempFile: false }, 'f.txt', content)
+
+    expect(client.put).toHaveBeenCalledWith(content, remotePath)
+    expect(client.exists).not.toHaveBeenCalledWith(remotePath)
+    expect(client.rename).not.toHaveBeenCalled()
   })
 })
