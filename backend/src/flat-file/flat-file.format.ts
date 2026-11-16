@@ -106,12 +106,12 @@ export function fileStamp(now: Date): { date: string; time: string } {
   return { date: value.slice(0, 8), time: value.slice(8) }
 }
 
-export function flatFileName(partnerName: string, now: Date): string {
+export function flatFileName(partnerName: string, now: Date, sequence = 1): string {
   const slug = partnerName
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
   const { date } = fileStamp(now)
-  return `acbc_requests_${slug}_${date.slice(0, 4)}_${date.slice(4, 6)}_${date.slice(6)}.txt`
+  return `acbc_requests_${slug}_${date.slice(0, 4)}_${date.slice(4, 6)}_${date.slice(6)}_${String(sequence).padStart(2, '0')}.txt`
 }

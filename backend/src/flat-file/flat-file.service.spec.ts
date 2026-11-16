@@ -60,7 +60,7 @@ function setup(
   pendingRequestIds: string[],
   operations: { id: string }[],
   rows: Record<string, unknown>[] = [sourceRow],
-  existingBatch: { batchId: string } | null = null,
+  nextSequence = 1,
 ) {
   const tx = {
     $executeRaw: vi.fn().mockResolvedValue(1),
@@ -74,9 +74,9 @@ function setup(
           request_id: pendingRequestIds[index] ?? 'r-1',
         })),
       )
+      .mockResolvedValueOnce([{ sequence: nextSequence }])
       .mockResolvedValueOnce([{ first: now, last: now }]),
     flatFileBatch: {
-      findFirst: vi.fn().mockResolvedValue(existingBatch),
       create: vi.fn().mockResolvedValue({ batchId: 'b-1' }),
       update: vi.fn(),
     },
@@ -86,7 +86,7 @@ function setup(
     $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
     partnerSystem: { findMany: vi.fn().mockResolvedValue([partner]) },
     partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(columns) },
-    flatFileBatch: { update: vi.fn() },
+    flatFileBatch: { findMany: vi.fn().mockResolvedValue([]), update: vi.fn() },
     $queryRaw: vi.fn().mockResolvedValue(rows),
   }
   const sftp = { upload: vi.fn() }
@@ -102,8 +102,8 @@ function setup(
 }
 
 describe('FlatFileService.generateForPartner', () => {
-  it('executes the transaction advisory lock without deserializing its void result', async () => {
-    const { service, tx } = setup([], [])
+  it('executes the transaction advisory lock before discovering requests', async () => {
+    const { service, tx } = setup(['r-1'], [{ id: 'o-1' }])
 
     await service.generateForPartner(partner, now)
 
@@ -112,18 +112,129 @@ describe('FlatFileService.generateForPartner', () => {
       'flat-file:p-1',
     )
     expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
-      tx.flatFileBatch.findFirst.mock.invocationCallOrder[0]!,
+      tx.$queryRaw.mock.invocationCallOrder[0]!,
+    )
+  })
+  it('resumes an incomplete batch before creating a sequenced file for later requests', async () => {
+    const snapshot = {
+      includeHeader: false,
+      encoding: 'UTF-8',
+      lineEnding: 'CRLF',
+      columns,
+    }
+    const incompleteBatch = {
+      batchId: 'b-1',
+      status: 'FAILED',
+      fileName: 'acbc_requests_icbc_2025_05_16_01.txt',
+      fileContent: null,
+      checksum: null,
+      generatedAt: null,
+      recordCount: 0,
+      layoutSnapshot: snapshot,
+      generationClaimedAt: null,
+      partner,
+    }
+    const resumeTx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      flatFileBatch: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue(incompleteBatch),
+        update: vi.fn(),
+      },
+    }
+    const nextTx = {
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce([{ request_id: 'r-2' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'o-2', request_id: 'r-2' }])
+        .mockResolvedValueOnce([{ sequence: 2 }])
+        .mockResolvedValueOnce([{ first: now, last: now }]),
+      flatFileBatch: {
+        create: vi.fn().mockResolvedValue({ batchId: 'b-2' }),
+        update: vi.fn(),
+      },
+      processingOperation: { updateMany: vi.fn() },
+    }
+    const create = nextTx.flatFileBatch.create
+    const createSpy = vi.fn((args: Parameters<typeof create>[0]) => create(args))
+    nextTx.flatFileBatch.create = createSpy
+    const prisma = {
+      $transaction: vi
+        .fn()
+        .mockImplementationOnce((callback: (tx: typeof resumeTx) => unknown) => callback(resumeTx))
+        .mockImplementationOnce((callback: (tx: typeof nextTx) => unknown) => callback(nextTx)),
+      partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(columns) },
+      flatFileBatch: {
+        findMany: vi.fn().mockResolvedValue([{ batchId: 'b-1' }]),
+        update: vi.fn(),
+      },
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValueOnce([sourceRow])
+        .mockResolvedValueOnce([{ ...sourceRow, request_id: 'r-2', last_name: 'Ng' }]),
+    }
+    const service = new FlatFileService(
+      prisma as unknown as PrismaService,
+      { upload: vi.fn() } as unknown as SftpTransport,
+      { upload: vi.fn() } as unknown as S3Transport,
+      { decrypt: vi.fn().mockReturnValue('DL-123') } as unknown as RequestEncryptionService,
+    )
+
+    await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
+      batchId: 'b-2',
+      status: 'READY',
+      fileName: 'acbc_requests_icbc_2025_05_16_02.txt',
+    })
+
+    const resumeSave = prisma.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )
+    expect(resumeSave?.[0]).toEqual(
+      expect.objectContaining({
+        where: { batchId: 'b-1' },
+        data: expect.objectContaining({
+          status: 'READY',
+          fileContent: expect.any(Uint8Array),
+          generationClaimedAt: null,
+        }),
+      }),
+    )
+    expect(resumeTx.flatFileBatch.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'BUILDING',
+          generationAttemptCount: { increment: 1 },
+        }),
+      }),
+    )
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          batchSequence: 2,
+          fileName: 'acbc_requests_icbc_2025_05_16_02.txt',
+        }),
+      }),
     )
   })
 
-  it('leaves requests for the next day when the partner already has a batch today', async () => {
-    const { service, tx } = setup(['r-1'], [{ id: 'o-1' }], [sourceRow], { batchId: 'b-0' })
+  it('creates a second sequenced file for new requests on the same partner day', async () => {
+    const { service, tx } = setup(['r-1'], [{ id: 'o-1' }], [sourceRow], 2)
 
     await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
-      status: 'SKIPPED',
-      batchId: null,
+      status: 'READY',
+      batchId: 'b-1',
+      fileName: 'acbc_requests_icbc_2025_05_16_02.txt',
     })
-    expect(tx.flatFileBatch.create).not.toHaveBeenCalled()
+    expect(tx.flatFileBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          batchSequence: 2,
+          fileName: 'acbc_requests_icbc_2025_05_16_02.txt',
+        }),
+      }),
+    )
   })
 
   it('skips partners with no pending operations', async () => {
@@ -158,9 +269,15 @@ describe('FlatFileService.generateForPartner', () => {
         return [sourceRow]
       })
       tx.$queryRaw
-        .mockResolvedValueOnce([{ request_id: 'r-1' }])
+        .mockResolvedValueOnce([{ request_id: 'r-2' }])
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ id: 'o-2', request_id: 'r-1' }])
+        .mockResolvedValueOnce([{ id: 'o-2', request_id: 'r-2' }])
+        .mockResolvedValueOnce([{ sequence: 1 }])
+        .mockResolvedValueOnce([{ first: now, last: now }])
+        .mockResolvedValueOnce([{ request_id: 'r-3' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'o-3', request_id: 'r-3' }])
+        .mockResolvedValueOnce([{ sequence: 1 }])
         .mockResolvedValueOnce([{ first: now, last: now }])
 
       const results = await service.generateAll(now)
@@ -190,7 +307,7 @@ describe('FlatFileService.generateForPartner', () => {
       batchId: 'b-1',
       status: 'READY',
       recordCount: 1,
-      fileName: 'acbc_requests_icbc_2025_05_16.txt',
+      fileName: 'acbc_requests_icbc_2025_05_16_01.txt',
     })
     expect(encryption.decrypt).toHaveBeenCalledWith(
       Buffer.from('encrypted'),
@@ -199,7 +316,8 @@ describe('FlatFileService.generateForPartner', () => {
     expect(tx.flatFileBatch.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          fileName: 'acbc_requests_icbc_2025_05_16.txt',
+          batchSequence: 1,
+          fileName: 'acbc_requests_icbc_2025_05_16_01.txt',
           firstRequestReceivedAt: now,
           lastRequestReceivedAt: now,
           layoutSnapshot: expect.objectContaining({ includeHeader: false, encoding: 'UTF-8' }),
