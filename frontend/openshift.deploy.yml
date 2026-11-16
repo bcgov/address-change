@@ -46,6 +46,9 @@ parameters:
   - name: OIDC_SCOPE
     description: Scopes requested at sign-in, including the submission scope
     required: true
+  - name: ALLOW_DATA_RESET
+    description: Shows the data reset link; "true" or "false" ("false" in production)
+    value: "false"
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -129,6 +132,8 @@ objects:
                   value: ${OIDC_CLIENT_ID}
                 - name: OIDC_SCOPE
                   value: ${OIDC_SCOPE}
+                - name: ALLOW_DATA_RESET
+                  value: "${ALLOW_DATA_RESET}"
                 # readOnlyRootFilesystem: true → redirect every writable path
                 # onto an emptyDir. Caddy stores config/data under the XDG dirs
                 # (mounted at /tmp/caddy); Coraza writes SecTmpDir/SecDataDir

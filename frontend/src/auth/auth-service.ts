@@ -5,9 +5,17 @@ const DEFAULT_CLIENT_ID = 'address-change-bc-6667'
 
 export const AUTH_CALLBACK_PATH = '/auth/callback'
 
-type RuntimeConfig = { oidcAuthority?: string; oidcClientId?: string; oidcScope?: string }
+type RuntimeConfig = {
+  oidcAuthority?: string
+  oidcClientId?: string
+  oidcScope?: string
+  allowDataReset?: boolean
+}
 
 let runtimeConfig: RuntimeConfig = {}
+
+/** True in local dev builds and in deployed environments that enable the data reset route. */
+export const isDataResetEnabled = () => import.meta.env.DEV || runtimeConfig.allowDataReset === true
 
 /** Loads per-environment OIDC settings served at /config.json; falls back to build-time values. */
 export async function loadRuntimeConfig(): Promise<void> {

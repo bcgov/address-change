@@ -61,6 +61,18 @@ parameters:
   - name: SFTP_SECRET
     description: Secret holding SFTP_CREDENTIAL_ENCRYPTION_KEY (base64, 32 bytes); created manually per namespace
     value: address-change-sftp
+  - name: FLAT_FILE_S3_BUCKET
+    description: Private bucket for immutable flat-file archives
+    value: ""
+  - name: AWS_REGION
+    description: Region containing the flat-file archive bucket
+    value: ca-central-1
+  - name: FLAT_FILE_S3_ENDPOINT
+    description: Optional endpoint for S3-compatible object storage
+    value: ""
+  - name: S3_SECRET
+    description: Optional Secret with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY keys
+    value: address-change-s3
   - name: OIDC_ISSUER
     description: OIDC issuer URL used to validate access tokens
     required: true
@@ -79,6 +91,9 @@ parameters:
   - name: APP_SECRET
     description: Pre-created Secret holding ADDRESS_CHANGE_ENCRYPTION_KEYS
     value: address-change-app
+  - name: ALLOW_DATA_RESET
+    description: Enables the resident self-service data deletion route; must be "false" in production
+    value: "false"
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -214,6 +229,24 @@ objects:
                       name: ${SFTP_SECRET}
                       key: SFTP_CREDENTIAL_ENCRYPTION_KEY
                       optional: true
+                - name: FLAT_FILE_S3_BUCKET
+                  value: ${FLAT_FILE_S3_BUCKET}
+                - name: AWS_REGION
+                  value: ${AWS_REGION}
+                - name: FLAT_FILE_S3_ENDPOINT
+                  value: ${FLAT_FILE_S3_ENDPOINT}
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: AWS_ACCESS_KEY_ID
+                      optional: true
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: AWS_SECRET_ACCESS_KEY
+                      optional: true
                 - name: OIDC_ISSUER
                   value: ${OIDC_ISSUER}
                 - name: OIDC_AUDIENCE
@@ -224,6 +257,8 @@ objects:
                   value: ${OIDC_SUBMISSION_SCOPE}
                 - name: ADDRESS_CHANGE_ENCRYPTION_KEY_ID
                   value: ${ENCRYPTION_KEY_ID}
+                - name: ALLOW_DATA_RESET
+                  value: "${ALLOW_DATA_RESET}"
                 - name: ADDRESS_CHANGE_ENCRYPTION_KEYS
                   valueFrom:
                     secretKeyRef:

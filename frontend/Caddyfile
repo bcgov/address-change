@@ -24,7 +24,7 @@
 	# Runtime OIDC settings so one image works in every environment
 	handle /config.json {
 		header Content-Type application/json
-		respond `{"oidcAuthority":"{$OIDC_AUTHORITY:}","oidcClientId":"{$OIDC_CLIENT_ID:}","oidcScope":"{$OIDC_SCOPE:}"}` 200
+		respond `{"oidcAuthority":"{$OIDC_AUTHORITY:}","oidcClientId":"{$OIDC_CLIENT_ID:}","oidcScope":"{$OIDC_SCOPE:}","allowDataReset":{$ALLOW_DATA_RESET:false}}` 200
 	}
 	file_server
 	@spa_router {
