@@ -168,7 +168,8 @@ export class FlatFileService {
   ): Promise<string | null> {
     // One file per partner per day: serialize generators, then leave later requests for tomorrow.
     // The lock function returns PostgreSQL void; execute it without deserializing a result row.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`flat-file:${partner.partnerId}`}, 0))`
+    const lockKey = `flat-file:${partner.partnerId}`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
     const { date } = fileStamp(now)
     const fileDate = new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}`)
     const existing = await tx.flatFileBatch.findFirst({
