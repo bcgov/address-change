@@ -1,0 +1,92 @@
+import { Injectable, Logger } from '@nestjs/common'
+import { S3Transport } from '../flat-file/s3.transport'
+import { PrismaService } from '../prisma.service'
+
+export const RETENTION_ACTOR = 'retention-job'
+const DEFAULT_RETENTION_DAYS = 30
+const DAY_MS = 86_400_000
+
+export type PurgeResult = {
+  cutoff: Date
+  deletedRequests: number
+  deletedBatches: number
+  deletedS3Objects: number
+  failedBatchIds: string[]
+}
+
+type ExpiredBatch = { batch_id: string; s3_object_key: string | null }
+
+export function retentionDays(): number {
+  const raw = process.env.DATA_RETENTION_DAYS?.trim()
+  if (!raw) return DEFAULT_RETENTION_DAYS
+  const days = Number(raw)
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error(`DATA_RETENTION_DAYS must be a positive integer, got "${raw}"`)
+  }
+  return days
+}
+
+export const purgeS3FlatFiles = () =>
+  process.env.DATA_PURGE_S3_FLAT_FILES?.trim().toLowerCase() !== 'false'
+
+@Injectable()
+export class RetentionService {
+  private readonly logger = new Logger(RetentionService.name)
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3Transport,
+  ) {}
+
+  /** Deletes requests (and cascaded personal data) older than the retention window, plus every flat file containing them. */
+  async purgeExpired(now = new Date()): Promise<PurgeResult> {
+    const cutoff = new Date(now.getTime() - retentionDays() * DAY_MS)
+    // A batch created before the cutoff can only hold requests created before it.
+    const batches = await this.prisma.$queryRaw<ExpiredBatch[]>`
+      SELECT b.batch_id::text, b.s3_object_key FROM address_change.flat_file_batch b
+      WHERE b.created_at < ${cutoff}
+         OR EXISTS (
+           SELECT 1 FROM address_change.processing_operation o
+           JOIN address_change.address_change_request r USING (request_id)
+           WHERE o.batch_id = b.batch_id AND r.created_at < ${cutoff})`
+
+    const failed = new Set<string>()
+    let deletedS3Objects = 0
+    if (purgeS3FlatFiles()) {
+      for (const batch of batches) {
+        if (!batch.s3_object_key) continue
+        try {
+          await this.s3.delete(batch.s3_object_key)
+          deletedS3Objects++
+        } catch (err) {
+          failed.add(batch.batch_id)
+          this.logger.error(
+            `S3 deletion of ${batch.s3_object_key} (batch ${batch.batch_id}) failed: ${(err as Error).message}`,
+          )
+        }
+      }
+    }
+    // Keep a batch whose S3 copy survived, and its requests, so the next run retries the whole set.
+    const batchIds = batches.map((b) => b.batch_id).filter((id) => !failed.has(id))
+    const failedBatchIds = [...failed]
+
+    const { deletedRequests, deletedBatches } = await this.prisma.$transaction(async (tx) => {
+      // Detached PENDING operations of newer requests are re-batched by the next generation run.
+      await tx.$executeRaw`
+        UPDATE address_change.processing_operation
+        SET batch_id = NULL, updated_at = ${now}, updated_by = ${RETENTION_ACTOR}
+        WHERE batch_id = ANY(${batchIds}::uuid[])`
+      const deletedRequests = await tx.$executeRaw`
+        DELETE FROM address_change.address_change_request r
+        WHERE r.created_at < ${cutoff}
+          AND NOT EXISTS (
+            SELECT 1 FROM address_change.processing_operation o
+            WHERE o.request_id = r.request_id AND o.batch_id = ANY(${failedBatchIds}::uuid[]))`
+      const deletedBatches = await tx.$executeRaw`
+        DELETE FROM address_change.flat_file_batch WHERE batch_id = ANY(${batchIds}::uuid[])`
+      return { deletedRequests, deletedBatches }
+    })
+
+    return { cutoff, deletedRequests, deletedBatches, deletedS3Objects, failedBatchIds }
+  }
+}

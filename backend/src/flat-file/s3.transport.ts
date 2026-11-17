@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Injectable } from '@nestjs/common'
 
 export class S3NotConfiguredError extends Error {
@@ -9,16 +9,13 @@ export class S3NotConfiguredError extends Error {
 export class S3Transport {
   private client?: S3Client
 
-  async upload(
-    partnerCode: string,
-    fileName: string,
-    content: Buffer,
-    checksum: string,
-  ): Promise<string> {
+  private bucket(): string {
     const bucket = process.env.FLAT_FILE_S3_BUCKET
     if (!bucket) throw new S3NotConfiguredError('FLAT_FILE_S3_BUCKET is not configured')
+    return bucket
+  }
 
-    const objectKey = `flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
+  private getClient(): S3Client {
     if (!this.client) {
       this.client = new S3Client({
         region: process.env.AWS_REGION || 'ca-central-1',
@@ -27,8 +24,23 @@ export class S3Transport {
           : {}),
       })
     }
-    const client = this.client
-    await client.send(
+    return this.client
+  }
+
+  async delete(objectKey: string): Promise<void> {
+    const bucket = this.bucket()
+    await this.getClient().send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey }))
+  }
+
+  async upload(
+    partnerCode: string,
+    fileName: string,
+    content: Buffer,
+    checksum: string,
+  ): Promise<string> {
+    const bucket = this.bucket()
+    const objectKey = `flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
+    await this.getClient().send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: objectKey,
