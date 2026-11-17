@@ -37,6 +37,7 @@ export default defineConfig({
       sidebar: [
         { label: "Overview", slug: "index" },
         { label: "Environments", slug: "environments" },
+        { label: "Test S3 object storage", slug: "flat-file-s3-test" },
         ...openAPISidebarGroups,
       ],
     }),

@@ -149,6 +149,7 @@ model FlatFileBatch {
   batchId                String    @id @default(dbgenerated("gen_random_uuid()")) @map("batch_id") @db.Uuid
   partnerId              String    @map("partner_id") @db.Uuid
   fileDate               DateTime  @map("file_date") @db.Date
+  batchSequence          Int       @default(1) @map("batch_sequence")
   status                 String    @default("BUILDING")
   fileName               String?   @map("file_name")
   recordCount            Int       @default(0) @map("record_count")
@@ -170,6 +171,9 @@ model FlatFileBatch {
   s3LastAttemptAt        DateTime? @map("s3_last_attempt_at") @db.Timestamptz(6)
   s3LastError            String?   @map("s3_last_error")
   s3ClaimedAt            DateTime? @map("s3_claimed_at") @db.Timestamptz(6)
+  generationAttemptCount Int       @default(0) @map("generation_attempt_count")
+  generationClaimedAt    DateTime? @map("generation_claimed_at") @db.Timestamptz(6)
+  generationLastError    String?   @map("generation_last_error")
   createdBy              String    @default(dbgenerated("CURRENT_USER")) @map("created_by")
   updatedAt              DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
   updatedBy              String    @default(dbgenerated("CURRENT_USER")) @map("updated_by")
@@ -179,6 +183,7 @@ model FlatFileBatch {
 
   @@unique([batchId, partnerId])
   @@unique([partnerId, fileName])
+  @@unique([partnerId, fileDate, batchSequence])
   @@map("flat_file_batch")
   @@schema("address_change")
 }
