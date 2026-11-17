@@ -63,9 +63,9 @@ function setup(
   existingBatch: { batchId: string } | null = null,
 ) {
   const tx = {
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi
       .fn()
-      .mockResolvedValueOnce([])
       .mockResolvedValueOnce(pendingRequestIds.map((request_id) => ({ request_id })))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(
@@ -102,6 +102,20 @@ function setup(
 }
 
 describe('FlatFileService.generateForPartner', () => {
+  it('executes the transaction advisory lock without deserializing its void result', async () => {
+    const { service, tx } = setup([], [])
+
+    await service.generateForPartner(partner, now)
+
+    expect(tx.$executeRaw).toHaveBeenCalledExactlyOnceWith(
+      expect.arrayContaining(['SELECT pg_advisory_xact_lock(hashtextextended(', ', 0))']),
+      'flat-file:p-1',
+    )
+    expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.flatFileBatch.findFirst.mock.invocationCallOrder[0]!,
+    )
+  })
+
   it('leaves requests for the next day when the partner already has a batch today', async () => {
     const { service, tx } = setup(['r-1'], [{ id: 'o-1' }], [sourceRow], { batchId: 'b-0' })
 
@@ -119,6 +133,51 @@ describe('FlatFileService.generateForPartner', () => {
       batchId: null,
     })
     expect(tx.flatFileBatch.create).not.toHaveBeenCalled()
+  })
+
+  it('records each partner completion after its generation start, not the shared job time', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+    try {
+      const { service, prisma, tx } = setup(['r-1'], [{ id: 'o-1' }])
+      prisma.partnerSystem.findMany.mockResolvedValue([
+        partner,
+        { ...partner, partnerId: 'p-2', partnerCode: 'HEALTH', partnerName: 'Health / MSP' },
+      ])
+      const generationStartedAt: Date[] = []
+      const completedAt: Date[] = []
+      tx.flatFileBatch.create.mockImplementation(async () => {
+        vi.setSystemTime(Date.now() + 250)
+        generationStartedAt.push(new Date())
+        return { batchId: `b-${generationStartedAt.length}` }
+      })
+      // Simulate records being loaded after each batch has been created.
+      prisma.$queryRaw.mockImplementation(async () => {
+        vi.setSystemTime(Date.now() + 1_000)
+        completedAt.push(new Date())
+        return [sourceRow]
+      })
+      tx.$queryRaw
+        .mockResolvedValueOnce([{ request_id: 'r-1' }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'o-2', request_id: 'r-1' }])
+        .mockResolvedValueOnce([{ first: now, last: now }])
+
+      const results = await service.generateAll(now)
+
+      expect(results.map((result) => result.status)).toEqual(['READY', 'READY'])
+      expect(prisma.flatFileBatch.update).toHaveBeenCalledTimes(2)
+      for (const [index, call] of prisma.flatFileBatch.update.mock.calls.entries()) {
+        const { generatedAt, updatedAt } = call[0].data
+        // flat_file_status exposes created_at as generation_started_at.
+        expect(generatedAt.getTime()).toBeGreaterThanOrEqual(generationStartedAt[index]!.getTime())
+        expect(generatedAt).toEqual(completedAt[index])
+        expect(generatedAt.getTime()).toBeGreaterThan(now.getTime())
+        expect(updatedAt).toEqual(generatedAt)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stores the layout snapshot, exact bytes, checksum, and first/last request times', async () => {
