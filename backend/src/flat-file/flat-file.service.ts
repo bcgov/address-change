@@ -43,6 +43,13 @@ const s3Enabled = () => Boolean(process.env.FLAT_FILE_S3_BUCKET?.trim())
 
 type IdRow = { id: string; request_id: string }
 type RequestWindow = { first: Date | null; last: Date | null }
+type FrozenBatch = { batchId: string; fileName: string; batchSequence: number }
+type LayoutSnapshot = {
+  includeHeader: boolean
+  encoding: string
+  lineEnding: string
+  columns: FlatFileColumn[]
+}
 const requestFieldContexts = {
   drivers_license_number: 'drivers_license_number',
   phn: 'phn',
@@ -89,6 +96,22 @@ export class FlatFileService {
   }
 
   async generateForPartner(partner: PartnerSystem, now = new Date()): Promise<BatchResult> {
+    let recovered: BatchResult | null = null
+    const incompleteBatches = await this.prisma.flatFileBatch.findMany({
+      where: {
+        partnerId: partner.partnerId,
+        fileContent: null,
+        status: { in: ['BUILDING', 'READY', 'FAILED'] },
+      },
+      orderBy: [{ fileDate: 'asc' }, { batchSequence: 'asc' }],
+      select: { batchId: true },
+    })
+    for (const { batchId } of incompleteBatches) {
+      const resumed = await this.resumeIncompleteBatch(batchId, now)
+      if (resumed.status === 'FAILED' || resumed.status === 'SKIPPED') return resumed
+      recovered = resumed
+    }
+
     const configuredColumns = await this.prisma.partnerFlatFileColumn.findMany({
       where: { partnerId: partner.partnerId, enabled: true },
       orderBy: { position: 'asc' },
@@ -110,26 +133,99 @@ export class FlatFileService {
       lineEnding: 'CRLF',
       columns,
     }
-    const fileName = flatFileName(partner.partnerName, now)
-    const batchId = await this.prisma.$transaction((tx) =>
-      this.freezeBatch(tx, partner, now, snapshot, fileName),
+    const batch = await this.prisma.$transaction((tx) =>
+      this.freezeBatch(tx, partner, now, snapshot),
     )
-    if (!batchId) {
+    if (!batch) {
+      return (
+        recovered ?? {
+          partnerCode: partner.partnerCode,
+          batchId: null,
+          status: 'SKIPPED',
+          recordCount: 0,
+        }
+      )
+    }
+    return this.generateFrozenBatch(batch.batchId, batch.fileName, partner, snapshot)
+  }
+
+  private async resumeIncompleteBatch(batchId: string, now: Date): Promise<BatchResult> {
+    const claim = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT batch_id FROM address_change.flat_file_batch WHERE batch_id = ${batchId}::uuid FOR UPDATE`
+      const batch = await tx.flatFileBatch.findUniqueOrThrow({
+        where: { batchId },
+        include: { partner: true },
+      })
+      if (batch.fileContent || !['BUILDING', 'READY', 'FAILED'].includes(batch.status)) {
+        return { batch, claimed: false, alreadyGenerated: Boolean(batch.fileContent) }
+      }
+      const claimedAt = batch.generationClaimedAt
+      const cutoff = new Date(Date.now() - claimLeaseMs())
+      if (claimedAt && claimedAt > cutoff) {
+        return { batch, claimed: false, alreadyGenerated: false }
+      }
+      const snapshot = this.parseLayoutSnapshot(batch.layoutSnapshot)
+      await tx.flatFileBatch.update({
+        where: { batchId },
+        data: {
+          status: 'BUILDING',
+          generationClaimedAt: now,
+          generationAttemptCount: { increment: 1 },
+          updatedAt: now,
+          updatedBy: FLAT_FILE_ACTOR,
+        },
+      })
+      return { batch, snapshot, claimed: true, alreadyGenerated: false }
+    })
+
+    if (claim.claimed === false) {
       return {
-        partnerCode: partner.partnerCode,
-        batchId: null,
-        status: 'SKIPPED',
-        recordCount: 0,
+        partnerCode: claim.batch.partner.partnerCode,
+        batchId,
+        status: claim.alreadyGenerated ? 'READY' : 'SKIPPED',
+        recordCount: claim.batch.recordCount,
+        fileName: claim.batch.fileName ?? undefined,
       }
     }
+    if (!claim.snapshot) throw new Error(`Batch ${batchId} recovery claim has no layout snapshot`)
+    return this.generateFrozenBatch(
+      batchId,
+      claim.batch.fileName as string,
+      claim.batch.partner,
+      claim.snapshot,
+    )
+  }
+
+  private parseLayoutSnapshot(value: Prisma.JsonValue | null): LayoutSnapshot {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Incomplete flat-file batch has no valid layout snapshot')
+    }
+    const snapshot = value as unknown as LayoutSnapshot
+    if (
+      typeof snapshot.includeHeader !== 'boolean' ||
+      typeof snapshot.encoding !== 'string' ||
+      !Array.isArray(snapshot.columns) ||
+      snapshot.columns.length === 0
+    ) {
+      throw new Error('Incomplete flat-file batch has an invalid layout snapshot')
+    }
+    return snapshot
+  }
+
+  private async generateFrozenBatch(
+    batchId: string,
+    fileName: string,
+    partner: PartnerSystem,
+    snapshot: LayoutSnapshot,
+  ): Promise<BatchResult> {
     try {
-      const records = await this.loadRecords(batchId, columns)
+      const records = await this.loadRecords(batchId, snapshot.columns)
       const content = encodeFlatFileContent(
-        formatFlatFile(records, columns, partner.includeHeader),
-        partner.flatFileEncoding,
+        formatFlatFile(records, snapshot.columns, snapshot.includeHeader),
+        snapshot.encoding,
       )
       const checksum = createHash('sha256').update(content).digest('hex')
-      // The shared job time determines file naming/date, not generation completion.
+      // The batch's sequence fixes its name; record actual completion time separately.
       const generatedAt = new Date()
       await this.prisma.flatFileBatch.update({
         where: { batchId },
@@ -138,6 +234,9 @@ export class FlatFileService {
           checksum,
           recordCount: records.length,
           generatedAt,
+          status: 'READY',
+          generationClaimedAt: null,
+          generationLastError: null,
           updatedAt: generatedAt,
           updatedBy: FLAT_FILE_ACTOR,
         },
@@ -152,7 +251,13 @@ export class FlatFileService {
     } catch (err) {
       await this.prisma.flatFileBatch.update({
         where: { batchId },
-        data: { status: 'FAILED', updatedAt: new Date(), updatedBy: FLAT_FILE_ACTOR },
+        data: {
+          status: 'FAILED',
+          generationClaimedAt: null,
+          generationLastError: `${(err as Error).message}`.slice(0, 500),
+          updatedAt: new Date(),
+          updatedBy: FLAT_FILE_ACTOR,
+        },
       })
       throw err
     }
@@ -164,24 +269,12 @@ export class FlatFileService {
     partner: PartnerSystem,
     now: Date,
     layoutSnapshot: object,
-    fileName: string,
-  ): Promise<string | null> {
-    // One file per partner per day: serialize generators, then leave later requests for tomorrow.
-    // The lock function returns PostgreSQL void; execute it without deserializing a result row.
+  ): Promise<FrozenBatch | null> {
+    // Serialize daily sequence allocation and operation freezing for this partner.
     const lockKey = `flat-file:${partner.partnerId}`
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
     const { date } = fileStamp(now)
     const fileDate = new Date(`${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6)}`)
-    const existing = await tx.flatFileBatch.findFirst({
-      where: { partnerId: partner.partnerId, fileDate },
-      select: { batchId: true },
-    })
-    if (existing) {
-      this.logger.log(
-        `${partner.partnerCode} already has batch ${existing.batchId} for ${fileDate.toISOString().slice(0, 10)}; pending requests wait for the next day`,
-      )
-      return null
-    }
     const candidates = await tx.$queryRaw<{ request_id: string }[]>`
       SELECT DISTINCT request_id FROM address_change.processing_operation
       WHERE partner_id = ${partner.partnerId}::uuid AND delivery_mode = 'FLAT_FILE'
@@ -198,6 +291,13 @@ export class FlatFileService {
       ORDER BY operation_id FOR UPDATE`
     if (operations.length === 0) return null
 
+    const sequenceRows = await tx.$queryRaw<{ sequence: number }[]>`
+      SELECT COALESCE(MAX(batch_sequence), 0) + 1 AS sequence
+      FROM address_change.flat_file_batch
+      WHERE partner_id = ${partner.partnerId}::uuid AND file_date = ${fileDate}::date`
+    const batchSequence = sequenceRows[0]?.sequence ?? 1
+    const fileName = flatFileName(partner.partnerName, now, batchSequence)
+
     const batchRequestIds = [...new Set(operations.map((operation) => operation.request_id))]
     const window = await tx.$queryRaw<RequestWindow[]>`
       SELECT MIN(received_at) AS first, MAX(received_at) AS last
@@ -207,11 +307,14 @@ export class FlatFileService {
       data: {
         partnerId: partner.partnerId,
         fileDate,
+        batchSequence,
         fileName,
         firstRequestReceivedAt: window[0]?.first,
         lastRequestReceivedAt: window[0]?.last,
         layoutSnapshot: layoutSnapshot as Prisma.InputJsonValue,
         status: 'BUILDING',
+        generationClaimedAt: now,
+        generationAttemptCount: 1,
         createdBy: FLAT_FILE_ACTOR,
         updatedBy: FLAT_FILE_ACTOR,
       },
@@ -220,11 +323,7 @@ export class FlatFileService {
       where: { operationId: { in: operations.map((operation) => operation.id) } },
       data: { batchId: batch.batchId, updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
     })
-    await tx.flatFileBatch.update({
-      where: { batchId: batch.batchId },
-      data: { status: 'READY', updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
-    })
-    return batch.batchId
+    return { batchId: batch.batchId, fileName, batchSequence }
   }
 
   private async loadRecords(

@@ -40,5 +40,9 @@ objects:
                 matchLabels:
                   app: ${NAME}-${ZONE}
                   deployment: ${NAME}-${ZONE}-backend
+            - podSelector:
+                matchLabels:
+                  app: ${NAME}-${ZONE}
+                  worker: ${NAME}-${ZONE}-flat-files
       policyTypes:
         - Ingress

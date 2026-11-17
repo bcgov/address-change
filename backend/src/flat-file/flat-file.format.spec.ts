@@ -60,11 +60,13 @@ describe('flatFileName', () => {
   const now = new Date('2025-05-17T02:10:24Z')
 
   it('builds a lower-case snake-case name with the Vancouver date', () => {
-    expect(flatFileName('ICBC', now)).toBe('acbc_requests_icbc_2025_05_16.txt')
+    expect(flatFileName('ICBC', now)).toBe('acbc_requests_icbc_2025_05_16_01.txt')
   })
 
   it('joins words in the partner name with underscores', () => {
-    expect(flatFileName(' Health / MSP ', now)).toBe('acbc_requests_health_msp_2025_05_16.txt')
+    expect(flatFileName(' Health / MSP ', now, 2)).toBe(
+      'acbc_requests_health_msp_2025_05_16_02.txt',
+    )
   })
 })
 
