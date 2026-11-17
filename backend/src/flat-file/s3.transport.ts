@@ -10,6 +10,9 @@ export class S3NotConfiguredError extends Error {
   readonly code = 'S3_NOT_CONFIGURED'
 }
 
+export const flatFileObjectKey = (partnerCode: string, fileName: string) =>
+  `address_change/flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
+
 @Injectable()
 export class S3Transport {
   private client?: S3Client
@@ -40,7 +43,7 @@ export class S3Transport {
   ): Promise<string> {
     const bucket = this.getBucket()
 
-    const objectKey = `address_change/flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
+    const objectKey = flatFileObjectKey(partnerCode, fileName)
     await this.getClient().send(
       new PutObjectCommand({
         Bucket: bucket,

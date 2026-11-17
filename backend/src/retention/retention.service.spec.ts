@@ -1,13 +1,29 @@
+import { FLAT_FILE_DATA_LOCK } from '../flat-file/flat-file.service'
 import type { S3Transport } from '../flat-file/s3.transport'
 import type { PrismaService } from '../prisma.service'
 import { RetentionService, retentionDays } from './retention.service'
 
 const now = new Date('2026-11-17T10:00:00Z')
 
-function setup(batches: { batch_id: string; s3_object_key: string | null }[]) {
+type BatchRow = {
+  batch_id: string
+  s3_object_key: string | null
+  s3_attempt_count?: number
+  file_name?: string | null
+}
+
+function setup(batches: BatchRow[]) {
   const tx = { $executeRaw: vi.fn().mockResolvedValue(2) }
   const prisma = {
-    $queryRaw: vi.fn().mockResolvedValue(batches),
+    withAdvisoryLock: vi.fn((_key: string, work: () => unknown) => work()),
+    $queryRaw: vi.fn().mockResolvedValue(
+      batches.map((batch) => ({
+        s3_attempt_count: batch.s3_object_key ? 1 : 0,
+        partner_code: 'ICBC',
+        file_name: 'a.txt',
+        ...batch,
+      })),
+    ),
     $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
   }
   const s3 = { delete: vi.fn().mockResolvedValue(undefined) }
@@ -46,6 +62,7 @@ describe('RetentionService', () => {
     const result = await service.purgeExpired(now)
 
     const cutoff = new Date('2026-10-18T10:00:00Z')
+    expect(prisma.withAdvisoryLock).toHaveBeenCalledWith(FLAT_FILE_DATA_LOCK, expect.any(Function))
     expect(values(prisma.$queryRaw.mock.calls[0]!)).toEqual([cutoff, cutoff])
     expect(s3.delete).toHaveBeenCalledExactlyOnceWith('flat-files/ICBC/a.txt')
     const [detach, deleteRequests, deleteBatches] = tx.$executeRaw.mock.calls
@@ -70,6 +87,18 @@ describe('RetentionService', () => {
     expect(s3.delete).not.toHaveBeenCalled()
     expect(values(tx.$executeRaw.mock.calls[2]!)).toEqual([['b-1']])
     expect(result.deletedS3Objects).toBe(0)
+  })
+
+  it('deletes the deterministic S3 key when an upload was attempted but its key was never recorded', async () => {
+    const { service, s3 } = setup([
+      { batch_id: 'b-1', s3_object_key: null, s3_attempt_count: 1, file_name: 'a b.txt' },
+      { batch_id: 'b-2', s3_object_key: null, s3_attempt_count: 1, file_name: null },
+    ])
+
+    const result = await service.purgeExpired(now)
+
+    expect(s3.delete).toHaveBeenCalledExactlyOnceWith('address_change/flat-files/ICBC/a b.txt')
+    expect(result.deletedS3Objects).toBe(1)
   })
 
   it('retains a batch and its requests when its S3 copy cannot be deleted', async () => {

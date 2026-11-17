@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { S3Transport } from '../flat-file/s3.transport'
+import { FLAT_FILE_DATA_LOCK } from '../flat-file/flat-file.service'
+import { S3Transport, flatFileObjectKey } from '../flat-file/s3.transport'
 import { PrismaService } from '../prisma.service'
 
 export const RETENTION_ACTOR = 'retention-job'
@@ -14,7 +15,21 @@ export type PurgeResult = {
   failedBatchIds: string[]
 }
 
-type ExpiredBatch = { batch_id: string; s3_object_key: string | null }
+type ExpiredBatch = {
+  batch_id: string
+  s3_object_key: string | null
+  s3_attempt_count: number
+  partner_code: string
+  file_name: string | null
+}
+
+// An upload interrupted before its key was recorded may still have written the deterministic key.
+function archiveKey(batch: ExpiredBatch): string | null {
+  if (batch.s3_object_key) return batch.s3_object_key
+  return batch.s3_attempt_count > 0 && batch.file_name
+    ? flatFileObjectKey(batch.partner_code, batch.file_name)
+    : null
+}
 
 export function retentionDays(): number {
   const raw = process.env.DATA_RETENTION_DAYS?.trim()
@@ -41,9 +56,15 @@ export class RetentionService {
   /** Deletes requests (and cascaded personal data) older than the retention window, plus every flat file containing them. */
   async purgeExpired(now = new Date()): Promise<PurgeResult> {
     const cutoff = new Date(now.getTime() - retentionDays() * DAY_MS)
+    return this.prisma.withAdvisoryLock(FLAT_FILE_DATA_LOCK, () => this.purge(now, cutoff))
+  }
+
+  private async purge(now: Date, cutoff: Date): Promise<PurgeResult> {
     // A batch created before the cutoff can only hold requests created before it.
     const batches = await this.prisma.$queryRaw<ExpiredBatch[]>`
-      SELECT b.batch_id::text, b.s3_object_key FROM address_change.flat_file_batch b
+      SELECT b.batch_id::text, b.s3_object_key, b.s3_attempt_count, p.partner_code, b.file_name
+      FROM address_change.flat_file_batch b
+      JOIN address_change.partner_system p USING (partner_id)
       WHERE b.created_at < ${cutoff}
          OR EXISTS (
            SELECT 1 FROM address_change.processing_operation o
@@ -54,14 +75,15 @@ export class RetentionService {
     let deletedS3Objects = 0
     if (purgeS3FlatFiles()) {
       for (const batch of batches) {
-        if (!batch.s3_object_key) continue
+        const key = archiveKey(batch)
+        if (!key) continue
         try {
-          await this.s3.delete(batch.s3_object_key)
+          await this.s3.delete(key)
           deletedS3Objects++
         } catch (err) {
           failed.add(batch.batch_id)
           this.logger.error(
-            `S3 deletion of ${batch.s3_object_key} (batch ${batch.batch_id}) failed: ${(err as Error).message}`,
+            `S3 deletion of ${key} (batch ${batch.batch_id}) failed: ${(err as Error).message}`,
           )
         }
       }
