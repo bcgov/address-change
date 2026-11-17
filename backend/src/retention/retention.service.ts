@@ -117,6 +117,13 @@ export class RetentionService {
             WHERE o.request_id = r.request_id AND o.batch_id = ANY(${retainedBatchIds}::uuid[]))`
       const deletedBatches = await tx.$executeRaw`
         DELETE FROM address_change.flat_file_batch WHERE batch_id = ANY(${batchIds}::uuid[])`
+      // An expired request kept by a retained batch must not be re-batched, or new batches would keep renewing its protection.
+      await tx.$executeRaw`
+        UPDATE address_change.processing_operation o
+        SET status = 'CANCELLED', updated_at = ${now}, updated_by = ${RETENTION_ACTOR}
+        FROM address_change.address_change_request r
+        WHERE o.request_id = r.request_id AND r.created_at < ${cutoff}
+          AND o.delivery_mode = 'FLAT_FILE' AND o.status = 'PENDING' AND o.batch_id IS NULL`
       return { deletedRequests, deletedBatches }
     })
 
