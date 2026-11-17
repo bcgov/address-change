@@ -54,7 +54,7 @@ describe('executePurge', () => {
     await expect(executePurge(async () => app, log)).resolves.toBe(false)
 
     expect(purgeExpired).not.toHaveBeenCalled()
-    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('positive integer'))
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('at least 7'))
     expect(app.close).toHaveBeenCalledOnce()
   })
 

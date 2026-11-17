@@ -86,7 +86,7 @@ parameters:
     description: Enables the resident self-service data deletion route; must be "false" in production
     value: "false"
   - name: DATA_RETENTION_DAYS
-    description: Requests, their personal data and flat files older than this many days are deleted
+    description: Requests, their personal data and flat files older than this many days are deleted (minimum 7; batches from the last 7 days are always kept)
     value: "30"
   - name: DATA_PURGE_S3_FLAT_FILES
     description: Also delete archived S3 copies of purged flat files ("true" or "false")

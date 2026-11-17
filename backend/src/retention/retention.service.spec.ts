@@ -10,6 +10,7 @@ type BatchRow = {
   s3_object_key: string | null
   s3_attempt_count?: number
   file_name?: string | null
+  is_protected?: boolean
 }
 
 function setup(batches: BatchRow[]) {
@@ -21,6 +22,7 @@ function setup(batches: BatchRow[]) {
         s3_attempt_count: batch.s3_object_key ? 1 : 0,
         partner_code: 'ICBC',
         file_name: 'a.txt',
+        is_protected: false,
         ...batch,
       })),
     ),
@@ -42,15 +44,15 @@ describe('RetentionService', () => {
     vi.unstubAllEnvs()
   })
 
-  it('defaults to 30 days and rejects invalid values', () => {
+  it('defaults to 30 days and requires at least 7', () => {
     vi.stubEnv('DATA_RETENTION_DAYS', '')
     expect(retentionDays()).toBe(30)
     vi.stubEnv('DATA_RETENTION_DAYS', '7')
     expect(retentionDays()).toBe(7)
-    vi.stubEnv('DATA_RETENTION_DAYS', '0')
-    expect(() => retentionDays()).toThrow('positive integer')
+    vi.stubEnv('DATA_RETENTION_DAYS', '6')
+    expect(() => retentionDays()).toThrow('at least 7')
     vi.stubEnv('DATA_RETENTION_DAYS', 'abc')
-    expect(() => retentionDays()).toThrow('positive integer')
+    expect(() => retentionDays()).toThrow('at least 7')
   })
 
   it('deletes S3 copies by default, then requests and batches older than the cutoff', async () => {
@@ -63,7 +65,11 @@ describe('RetentionService', () => {
 
     const cutoff = new Date('2026-10-18T10:00:00Z')
     expect(prisma.withAdvisoryLock).toHaveBeenCalledWith(FLAT_FILE_DATA_LOCK, expect.any(Function))
-    expect(values(prisma.$queryRaw.mock.calls[0]!)).toEqual([cutoff, cutoff])
+    expect(values(prisma.$queryRaw.mock.calls[0]!)).toEqual([
+      new Date('2026-11-10T10:00:00Z'),
+      cutoff,
+      cutoff,
+    ])
     expect(s3.delete).toHaveBeenCalledExactlyOnceWith('flat-files/ICBC/a.txt')
     const [detach, deleteRequests, deleteBatches] = tx.$executeRaw.mock.calls
     expect(values(detach!)).toEqual([now, 'retention-job', ['b-1', 'b-2']])
@@ -99,6 +105,22 @@ describe('RetentionService', () => {
 
     expect(s3.delete).toHaveBeenCalledExactlyOnceWith('address_change/flat-files/ICBC/a b.txt')
     expect(result.deletedS3Objects).toBe(1)
+  })
+
+  it('keeps batches from the last 7 days, with their expired requests, so file sequences are not reused', async () => {
+    const { service, tx, s3 } = setup([
+      { batch_id: 'b-1', s3_object_key: 'flat-files/ICBC/old.txt' },
+      { batch_id: 'b-2', s3_object_key: 'flat-files/ICBC/today.txt', is_protected: true },
+    ])
+
+    const result = await service.purgeExpired(now)
+
+    expect(s3.delete).toHaveBeenCalledExactlyOnceWith('flat-files/ICBC/old.txt')
+    const [detach, deleteRequests, deleteBatches] = tx.$executeRaw.mock.calls
+    expect(values(detach!)).toEqual([now, 'retention-job', ['b-1']])
+    expect(values(deleteRequests!)[1]).toEqual(['b-2'])
+    expect(values(deleteBatches!)).toEqual([['b-1']])
+    expect(result.failedBatchIds).toEqual([])
   })
 
   it('retains a batch and its requests when its S3 copy cannot be deleted', async () => {
