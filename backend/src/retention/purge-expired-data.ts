@@ -1,7 +1,12 @@
 import { Logger } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { RetentionModule } from './retention.module'
-import { RetentionService, purgeS3FlatFiles, retentionDays } from './retention.service'
+import {
+  RetentionService,
+  purgeS3FlatFiles,
+  retentionDays,
+  s3RetentionDays,
+} from './retention.service'
 
 type ApplicationContext = {
   get<T>(token: new (...args: never[]) => T): T
@@ -16,13 +21,13 @@ export async function executePurge(
   try {
     app = await createApplicationContext()
     logger.log(
-      `Purging data older than ${retentionDays()} days (S3 flat files: ${purgeS3FlatFiles()})`,
+      `Purging data older than ${retentionDays()} days (S3 flat files: ${purgeS3FlatFiles()}, retention: ${s3RetentionDays()} days)`,
     )
     const result = await app.get(RetentionService).purgeExpired()
     logger.log(
-      `cutoff=${result.cutoff.toISOString()} requests=${result.deletedRequests} batches=${result.deletedBatches} s3Objects=${result.deletedS3Objects} failedBatches=${result.failedBatchIds.length}`,
+      `cutoff=${result.cutoff.toISOString()} requests=${result.deletedRequests} batches=${result.deletedBatches} s3Objects=${result.deletedS3Objects} s3Errors=${result.s3Errors}`,
     )
-    return result.failedBatchIds.length === 0
+    return result.s3Errors === 0
   } catch (err) {
     logger.error((err as Error).message)
     return false

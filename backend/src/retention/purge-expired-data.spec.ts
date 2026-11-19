@@ -11,12 +11,12 @@ function application(purgeExpired: ReturnType<typeof vi.fn>) {
   }
 }
 
-const result = (failedBatchIds: string[] = []) => ({
+const result = (s3Errors = 0) => ({
   cutoff: new Date('2026-10-18T10:00:00Z'),
   deletedRequests: 3,
   deletedBatches: 1,
   deletedS3Objects: 1,
-  failedBatchIds,
+  s3Errors,
 })
 
 describe('executePurge', () => {
@@ -31,15 +31,17 @@ describe('executePurge', () => {
     await expect(executePurge(async () => app, log)).resolves.toBe(true)
 
     expect(app.get).toHaveBeenCalledWith(RetentionService)
-    expect(log.log).toHaveBeenCalledWith('Purging data older than 30 days (S3 flat files: true)')
     expect(log.log).toHaveBeenCalledWith(
-      'cutoff=2026-10-18T10:00:00.000Z requests=3 batches=1 s3Objects=1 failedBatches=0',
+      'Purging data older than 30 days (S3 flat files: true, retention: 60 days)',
+    )
+    expect(log.log).toHaveBeenCalledWith(
+      'cutoff=2026-10-18T10:00:00.000Z requests=3 batches=1 s3Objects=1 s3Errors=0',
     )
     expect(app.close).toHaveBeenCalledOnce()
   })
 
   it('reports failure when an S3 deletion failed', async () => {
-    const app = application(vi.fn().mockResolvedValue(result(['b-1'])))
+    const app = application(vi.fn().mockResolvedValue(result(1)))
 
     await expect(executePurge(async () => app, logger())).resolves.toBe(false)
     expect(app.close).toHaveBeenCalledOnce()

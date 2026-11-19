@@ -22,13 +22,43 @@ vi.mock('@aws-sdk/client-s3', () => {
   class DeleteObjectCommand {
     constructor(readonly input: Record<string, unknown>) {}
   }
-  return { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand }
+  class ListObjectsV2Command {
+    constructor(readonly input: Record<string, unknown>) {}
+  }
+  return { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command }
 })
 
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { S3NotConfiguredError, S3Transport } from './s3.transport'
 
 describe('S3Transport', () => {
+  it('lists every bucket page without a prefix and skips missing timestamps', async () => {
+    const date = new Date('2026-01-01')
+    sdk.send
+      .mockResolvedValueOnce({
+        Contents: [{ Key: 'anywhere/old', LastModified: date }, { Key: 'unknown' }],
+        IsTruncated: true,
+        NextContinuationToken: 'next',
+      })
+      .mockResolvedValueOnce({ Contents: [{ Key: 'root', LastModified: date }] })
+    const objects = []
+    for await (const object of new S3Transport().objects()) objects.push(object)
+    expect(objects).toEqual([
+      { key: 'anywhere/old', createdAt: date },
+      { key: 'root', createdAt: date },
+    ])
+    expect(sdk.send.mock.calls.map(([command]) => command.input)).toEqual([
+      { Bucket: 'test-bucket', ContinuationToken: undefined },
+      { Bucket: 'test-bucket', ContinuationToken: 'next' },
+    ])
+  })
+
+  it('handles an empty bucket and rejects truncated pages without a token', async () => {
+    sdk.send.mockResolvedValueOnce({})
+    for await (const _object of new S3Transport().objects()) throw new Error('unexpected object')
+    sdk.send.mockResolvedValueOnce({ IsTruncated: true })
+    await expect(new S3Transport().objects().next()).rejects.toThrow('continuation token')
+  })
   beforeEach(() => {
     sdk.send.mockReset()
     sdk.clientConfigs.length = 0
