@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
@@ -9,6 +10,9 @@ import { Injectable } from '@nestjs/common'
 export class S3NotConfiguredError extends Error {
   readonly code = 'S3_NOT_CONFIGURED'
 }
+
+export const flatFileObjectKey = (partnerCode: string, fileName: string) =>
+  `address_change/flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
 
 @Injectable()
 export class S3Transport {
@@ -40,7 +44,7 @@ export class S3Transport {
   ): Promise<string> {
     const bucket = this.getBucket()
 
-    const objectKey = `address_change/flat-files/${encodeURIComponent(partnerCode)}/${fileName}`
+    const objectKey = flatFileObjectKey(partnerCode, fileName)
     await this.getClient().send(
       new PutObjectCommand({
         Bucket: bucket,
@@ -66,5 +70,23 @@ export class S3Transport {
     await this.getClient().send(
       new DeleteObjectCommand({ Bucket: this.getBucket(), Key: objectKey }),
     )
+  }
+
+  async *objects(): AsyncGenerator<{ key: string; createdAt: Date }> {
+    const bucket = this.getBucket()
+    let token: string | undefined
+    do {
+      const page = await this.getClient().send(
+        new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }),
+      )
+      for (const object of page.Contents ?? []) {
+        // S3 exposes LastModified, not an immutable creation time; overwrites restart retention.
+        if (object.Key && object.LastModified) {
+          yield { key: object.Key, createdAt: object.LastModified }
+        }
+      }
+      token = page.IsTruncated ? page.NextContinuationToken : undefined
+      if (page.IsTruncated && !token) throw new Error('S3 listing omitted its continuation token')
+    } while (token)
   }
 }

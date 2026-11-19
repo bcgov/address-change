@@ -65,6 +65,27 @@ class PrismaService extends PrismaClientWithLogs implements OnModuleInit, OnModu
   async onModuleDestroy() {
     await this.$disconnect()
   }
+
+  /** Runs `work` while an open transaction on a dedicated connection holds an advisory lock. */
+  async withAdvisoryLock<T>(key: string, work: () => Promise<T>): Promise<T> {
+    const client = await this.pool.connect()
+    try {
+      // A transaction-scoped lock stays pinned to one server session, including behind transaction-mode PgBouncer.
+      await client.query('BEGIN')
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key])
+      let result: T
+      try {
+        result = await work()
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => undefined)
+        throw err
+      }
+      await client.query('COMMIT')
+      return result
+    } finally {
+      client.release(true)
+    }
+  }
 }
 
 export { PrismaService }

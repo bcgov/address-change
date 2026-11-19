@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { PartnerSystem } from '../../generated/prisma/client.js'
 import type { RequestEncryptionService } from '../address-change/request-encryption.service'
-import { FlatFileService } from './flat-file.service'
+import { FLAT_FILE_DATA_LOCK, FlatFileService } from './flat-file.service'
 import type { S3Transport } from './s3.transport'
 import type { SftpTransport } from './sftp.transport'
 import type { PrismaService } from '../prisma.service'
@@ -83,6 +83,7 @@ function setup(
     processingOperation: { updateMany: vi.fn() },
   }
   const prisma = {
+    withAdvisoryLock: vi.fn((_key: string, work: () => unknown) => work()),
     $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
     partnerSystem: { findMany: vi.fn().mockResolvedValue([partner]) },
     partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(columns) },
@@ -283,6 +284,10 @@ describe('FlatFileService.generateForPartner', () => {
       const results = await service.generateAll(now)
 
       expect(results.map((result) => result.status)).toEqual(['READY', 'READY'])
+      expect(prisma.withAdvisoryLock).toHaveBeenCalledWith(
+        FLAT_FILE_DATA_LOCK,
+        expect.any(Function),
+      )
       expect(prisma.flatFileBatch.update).toHaveBeenCalledTimes(2)
       for (const [index, call] of prisma.flatFileBatch.update.mock.calls.entries()) {
         const { generatedAt, updatedAt } = call[0].data
@@ -392,6 +397,7 @@ describe('FlatFileService transfer', () => {
       addressChangeRequest: { update: vi.fn() },
     }
     const prisma = {
+      withAdvisoryLock: vi.fn((_key: string, work: () => unknown) => work()),
       $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
       flatFileBatch: {
         update: vi.fn(),
@@ -424,6 +430,7 @@ describe('FlatFileService transfer', () => {
       },
     ])
     expect(sftpUpload).toHaveBeenCalledWith(partner, 'ICBC.Address.TXT', Buffer.from('x'))
+    expect(prisma.withAdvisoryLock).toHaveBeenCalledWith(FLAT_FILE_DATA_LOCK, expect.any(Function))
     expect(s3Upload).toHaveBeenCalledWith(
       partner.partnerCode,
       'ICBC.Address.TXT',

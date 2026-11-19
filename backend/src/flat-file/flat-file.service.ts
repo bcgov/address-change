@@ -16,6 +16,8 @@ import { S3Transport } from './s3.transport'
 import { SftpTransport } from './sftp.transport'
 
 export const FLAT_FILE_ACTOR = 'flat-file-job'
+// Serializes flat-file generation/delivery with the retention purge.
+export const FLAT_FILE_DATA_LOCK = 'address-change:flat-file-data'
 
 export type BatchResult = {
   partnerCode: string
@@ -72,6 +74,10 @@ export class FlatFileService {
   ) {}
 
   async generateAll(now = new Date()): Promise<BatchResult[]> {
+    return this.prisma.withAdvisoryLock(FLAT_FILE_DATA_LOCK, () => this.generateAllLocked(now))
+  }
+
+  private async generateAllLocked(now: Date): Promise<BatchResult[]> {
     const partners = await this.prisma.partnerSystem.findMany({
       where: { active: true, deliveryMode: 'FLAT_FILE' },
       orderBy: { partnerCode: 'asc' },
@@ -355,6 +361,10 @@ export class FlatFileService {
   }
 
   async transferPending(): Promise<TransferResult[]> {
+    return this.prisma.withAdvisoryLock(FLAT_FILE_DATA_LOCK, () => this.transferPendingLocked())
+  }
+
+  private async transferPendingLocked(): Promise<TransferResult[]> {
     // TRANSFERRING is included so a batch orphaned by a crash is retried once its lease expires.
     const batches = await this.prisma.flatFileBatch.findMany({
       where: {

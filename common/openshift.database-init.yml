@@ -44,5 +44,9 @@ objects:
                 matchLabels:
                   app: ${NAME}-${ZONE}
                   worker: ${NAME}-${ZONE}-flat-files
+            - podSelector:
+                matchLabels:
+                  app: ${NAME}-${ZONE}
+                  worker: ${NAME}-${ZONE}-data-purge
       policyTypes:
         - Ingress
