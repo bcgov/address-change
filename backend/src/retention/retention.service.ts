@@ -111,6 +111,14 @@ export class RetentionService {
     const retainedBatchIds = batches.map((b) => b.batch_id).filter((id) => !batchIds.includes(id))
 
     const { deletedRequests, deletedBatches } = await this.prisma.$transaction(async (tx) => {
+      // Match request-first locking used by cascading resident data deletion.
+      await tx.$queryRaw`
+        SELECT r.request_id FROM address_change.address_change_request r
+        WHERE r.created_at < ${cutoff}
+           OR EXISTS (
+             SELECT 1 FROM address_change.processing_operation o
+             WHERE o.request_id = r.request_id AND o.batch_id = ANY(${batchIds}::uuid[]))
+        ORDER BY r.request_id FOR UPDATE OF r`
       // Detached PENDING operations of newer requests are re-batched by the next generation run.
       await tx.$executeRaw`
         UPDATE address_change.processing_operation

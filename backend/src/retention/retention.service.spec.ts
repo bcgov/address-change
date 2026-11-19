@@ -12,7 +12,10 @@ function setup(
     { batch_id: 'recent', is_protected: true },
   ],
 ) {
-  const tx = { $executeRaw: vi.fn().mockResolvedValue(2) }
+  const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(2),
+  }
   const prisma = {
     withAdvisoryLock: vi.fn((_key: string, work: () => unknown) => work()),
     $queryRaw: vi.fn().mockResolvedValue(batches),
@@ -87,6 +90,24 @@ describe('RetentionService', () => {
       'backup.txt',
       'boundary.txt',
     ])
+  })
+
+  it('locks expired requests and newer requests in purgeable batches before updating operations', async () => {
+    const { service, tx } = setup()
+
+    await service.purgeExpired(now)
+
+    expect(tx.$queryRaw).toHaveBeenCalledOnce()
+    const [strings, ...values] = tx.$queryRaw.mock.calls[0]! as unknown as [string[], ...unknown[]]
+    expect(values).toEqual([age(30), ['old']])
+    const sql = strings.join('?')
+    expect(sql).toContain('r.created_at < ?')
+    expect(sql).toContain('OR EXISTS')
+    expect(sql).toContain('o.request_id = r.request_id AND o.batch_id = ANY(?::uuid[])')
+    expect(sql).toContain('ORDER BY r.request_id FOR UPDATE OF r')
+    expect(tx.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.$executeRaw.mock.invocationCallOrder[0]!,
+    )
   })
 
   it.each(['disabled', 'unconfigured'])('skips S3 when %s', async (mode) => {
