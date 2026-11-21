@@ -823,3 +823,48 @@ fieldset.app-card {
 .status-tag--failed {
   background: #f4e1e2;
 }
+
+.service-unavailable-page {
+  background: var(--surface-color-background-white);
+}
+
+.service-unavailable-page .app-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.service-unavailable {
+  max-width: 36rem;
+  text-align: center;
+}
+
+.service-unavailable-illustration {
+  width: 12rem;
+  height: auto;
+  margin-bottom: var(--layout-margin-large);
+}
+
+.service-unavailable h1 {
+  color: var(--theme-primary-blue);
+}
+
+.service-unavailable-progress {
+  height: 8px;
+  margin: var(--layout-margin-large) 0 var(--layout-margin-small);
+  background: var(--surface-color-background-light-gray);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.service-unavailable-progress-bar {
+  height: 100%;
+  background: var(--theme-primary-blue);
+  transition: width 1s linear;
+}
+
+.service-unavailable-status {
+  margin-bottom: var(--layout-margin-large);
+  color: var(--typography-color-secondary);
+}
