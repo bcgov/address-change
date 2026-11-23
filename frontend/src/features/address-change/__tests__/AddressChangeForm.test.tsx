@@ -130,8 +130,9 @@ describe('AddressChangeForm step flow', () => {
     await userEvent.type(await screen.findByLabelText(/Address line 1/), '1 Main St')
     await userEvent.type(screen.getByLabelText(/City/), 'Victoria')
     await userEvent.type(screen.getByLabelText(/Postal code/), 'V8V 1A1')
-    expect(screen.queryByLabelText(/Province/)).not.toBeInTheDocument()
-    expect(screen.getAllByText('British Columbia, Canada').length).toBeGreaterThan(0)
+    const province = screen.getAllByLabelText(/Province/)[0]
+    expect(province).toBeDisabled()
+    expect(province).toHaveValue('British Columbia')
     await click('Continue')
 
     expect(await screen.findByRole('checkbox', { name: /BC Services Card/ })).toBeDisabled()
