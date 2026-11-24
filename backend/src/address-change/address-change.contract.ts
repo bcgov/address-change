@@ -61,15 +61,6 @@ export const addressChangeRequestSchema = z
   .refine((value) => value.isBillingAddressSame || value.mailingAddress !== undefined, {
     path: ['mailingAddress'],
   })
-  .refine(
-    (value) =>
-      value.notificationIntent.notifyIcbc ||
-      value.notificationIntent.notifyMsp ||
-      value.notificationIntent.notifyBcsc === true,
-    {
-      path: ['notificationIntent'],
-    },
-  )
 
 export const draftDataSchema = z
   .object({

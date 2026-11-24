@@ -356,7 +356,6 @@ describe('AddressChange intake HTTP + SQL integration', () => {
     { ...validRequest, ownerSub: 'untrusted-user' },
     { ...validRequest, person: { ...validRequest.person, dateOfBirth: 'private-invalid-value' } },
     { ...validRequest, isBillingAddressSame: false },
-    { ...validRequest, notificationIntent: { notifyIcbc: false, notifyMsp: false } },
     { ...validRequest, requestedDeliveries: ['ICBC'] },
   ])('rejects invalid/client-controlled fields without reflecting private values', async (body) => {
     const response = await submit(body).expect(400)
