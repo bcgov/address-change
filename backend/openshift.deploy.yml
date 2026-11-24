@@ -114,6 +114,7 @@ objects:
             vault.hashicorp.com/agent-inject-token: "false"
             vault.hashicorp.com/agent-pre-populate-only: "true"
             vault.hashicorp.com/agent-init-first: "true"
+            vault.hashicorp.com/agent-service-account-token-volume-name: vault-auth-token
             vault.hashicorp.com/auth-path: auth/k8s-gold
             vault.hashicorp.com/namespace: platform-services
             vault.hashicorp.com/role: ${VAULT_ROLE}
@@ -132,6 +133,7 @@ objects:
             database-client: ${DB_CLIENT}
         spec:
           serviceAccountName: b5cfc6-vault
+          automountServiceAccountToken: false
           terminationGracePeriodSeconds: 30
           affinity:
             podAntiAffinity:
@@ -307,6 +309,12 @@ objects:
                     # distroless/nodejs has no /bin/sleep; exec hooks skip image ENTRYPOINT
                     command: ["/nodejs/bin/node", "-e", "setTimeout(() => {}, 10000)"]
           volumes:
+            - name: vault-auth-token
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      expirationSeconds: 600
             - name: tmp
               emptyDir:
                 medium: Memory
@@ -341,7 +349,7 @@ objects:
               restartPolicy: Never
               terminationGracePeriodSeconds: 30
               serviceAccountName: b5cfc6-vault
-              automountServiceAccountToken: true
+              automountServiceAccountToken: false
               containers:
                 - name: flat-files
                   image: ${REGISTRY}/${ORG_NAME}/${NAME}/${COMPONENT}:${IMAGE_TAG}
@@ -366,6 +374,12 @@ objects:
                     - name: tmp
                       mountPath: /tmp
               volumes:
+                - name: vault-auth-token
+                  projected:
+                    sources:
+                      - serviceAccountToken:
+                          path: token
+                          expirationSeconds: 600
                 - name: tmp
                   emptyDir:
                     medium: Memory

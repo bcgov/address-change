@@ -56,6 +56,14 @@ class DatabaseTemplates(unittest.TestCase):
             with self.subTest(target=target):
                 pod = backend(target)
                 self.assertEqual(pod['spec']['serviceAccountName'], 'b5cfc6-vault')
+                self.assertFalse(pod['spec']['automountServiceAccountToken'])
+                token_volume = next(v for v in pod['spec']['volumes']
+                                    if v['name'] == 'vault-auth-token')
+                self.assertEqual(token_volume['projected']['sources'][0]
+                                 ['serviceAccountToken']['expirationSeconds'], 600)
+                for container in pod['spec']['containers'] + pod['spec']['initContainers']:
+                    self.assertFalse(any(v['name'] == 'vault-auth-token'
+                                         for v in container.get('volumeMounts', [])))
                 annotations = pod['metadata']['annotations']
                 self.assertEqual(annotations['vault.hashicorp.com/agent-init-first'], 'true')
                 mount = 'b5cfc6-prod' if target == 'prod' else 'b5cfc6-nonprod'
