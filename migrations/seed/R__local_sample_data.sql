@@ -46,6 +46,7 @@ WHERE r.request_id IN ('11111111-1111-4111-8111-111111111111', '22222222-2222-42
   AND p.delivery_mode = 'FLAT_FILE'
 ON CONFLICT DO NOTHING;
 
+-- Local runs skip host key pinning: set SFTP_ALLOW_UNVERIFIED_HOST_KEY=true (the container's key changes when recreated).
 -- Points both partners at the local `sftp` compose service (password "localpass").
 -- The password is encrypted with the throwaway local-only key
 -- SFTP_CREDENTIAL_ENCRYPTION_KEY=gdxNFKnHOBe947MQ19SOfeAusFG5BwJHwVlzHa8jBA0= (never use outside local dev).

@@ -1,5 +1,7 @@
-lockfile_version: '1'
-apm_version: 0.34.0
+lockfile_version: '4'
+apm_version: 0.38.0
+manifest_targets:
+- copilot
 dependencies:
 - repo_url: bcgov/agent-marketplace
   name: github-actions
@@ -12,14 +14,20 @@ dependencies:
   package_type: claude_skill
   deployed_files:
   - .agents/skills/github-actions
+  - .agents/skills/github-actions/LICENSE
   - .agents/skills/github-actions/SKILL.md
   - .agents/skills/github-actions/bcgov-extension.yaml
   - .agents/skills/github-actions/references/REFERENCE.md
   deployed_file_hashes:
+    .agents/skills/github-actions/LICENSE: sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
     .agents/skills/github-actions/SKILL.md: sha256:db4c7c33bcca1413b8cc1fdbd49612ef706c2eb67acf007b1daa79239353a4b3
     .agents/skills/github-actions/bcgov-extension.yaml: sha256:c2224b634c542a76fb7cf9a59a34f3037268d6bccc5d01e643008284b315047e
     .agents/skills/github-actions/references/REFERENCE.md: sha256:75bfbe56ba2bddd085b2878c261197d85e60d298f0dd0129647769f463fbe566
-  content_hash: sha256:0fb63333c933e3b275ae28d626e481f41821187adda8def3edc31b34dd7c9bb8
+  content_hash: sha256:f00cdbe02af7ee41225107805f0eaa5c83e13dcb700b4a0017ec7aeaf0c09aa8
+  carried_licenses:
+  - path: LICENSE
+    source: LICENSE
+    hash: sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
 - repo_url: bcgov/agent-marketplace
   name: openshift-deployment
   host: github.com
@@ -31,14 +39,20 @@ dependencies:
   package_type: claude_skill
   deployed_files:
   - .agents/skills/openshift-deployment
+  - .agents/skills/openshift-deployment/LICENSE
   - .agents/skills/openshift-deployment/SKILL.md
   - .agents/skills/openshift-deployment/bcgov-extension.yaml
   - .agents/skills/openshift-deployment/references/REFERENCE.md
   deployed_file_hashes:
+    .agents/skills/openshift-deployment/LICENSE: sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
     .agents/skills/openshift-deployment/SKILL.md: sha256:3f23ff8fb6ce97442080318a3f05678040d407ed3f899b26c281de1720efc5e4
     .agents/skills/openshift-deployment/bcgov-extension.yaml: sha256:9d845500e2be0d687cabe6db2839b6fb1a07137423bdce4dd566413063d204c7
     .agents/skills/openshift-deployment/references/REFERENCE.md: sha256:331430ddc0819ba7bce912be98674f2d86db5a2e633921e31a69f49f4da6fd00
-  content_hash: sha256:f9b36a06f2416ac4de9bc49b380f96c3c41cda45a201c9707083c4fdfb612ce1
+  content_hash: sha256:e61eda6e8cd5e07438c5c8406bc42c313f3f389ab3665983d861db4302cc6606
+  carried_licenses:
+  - path: LICENSE
+    source: LICENSE
+    hash: sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
 deployments:
 - kind: project-relative
   target: copilot
@@ -49,6 +63,15 @@ deployments:
   - bcgov/agent-marketplace/skills/community/github-actions
   active_owner: bcgov/agent-marketplace/skills/community/github-actions
   content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/github-actions/LICENSE
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/github-actions
+  active_owner: bcgov/agent-marketplace/skills/community/github-actions
+  content_hash: sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
 - kind: project-relative
   target: copilot
   value: .agents/skills/github-actions/SKILL.md
@@ -85,6 +108,15 @@ deployments:
   - bcgov/agent-marketplace/skills/community/openshift-deployment
   active_owner: bcgov/agent-marketplace/skills/community/openshift-deployment
   content_hash: null
+- kind: project-relative
+  target: copilot
+  value: .agents/skills/openshift-deployment/LICENSE
+  runtime: null
+  scope: project
+  owners:
+  - bcgov/agent-marketplace/skills/community/openshift-deployment
+  active_owner: bcgov/agent-marketplace/skills/community/openshift-deployment
+  content_hash: sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
 - kind: project-relative
   target: copilot
   value: .agents/skills/openshift-deployment/SKILL.md

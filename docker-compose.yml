@@ -3,7 +3,7 @@ x-var:
   - &POSTGRES_USER postgres
   - &POSTGRES_PASSWORD default
   - &POSTGRES_DATABASE postgres
-  - &node-image node:22
+  - &node-image node:26.12.1-bookworm
 
 # Reusable envars for postgres
 x-postgres-vars: &postgres-vars
@@ -66,6 +66,7 @@ services:
     environment:
       <<: *postgres-vars
       NODE_ENV: development
+      ALLOW_DATA_RESET: "true"
       OIDC_ISSUER: ${OIDC_ISSUER:-https://dev.loginproxy.gov.bc.ca/auth/realms/standard}
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-address-change-bc-6667}
       OIDC_JWKS_URI: ${OIDC_JWKS_URI:-https://dev.loginproxy.gov.bc.ca/auth/realms/standard/protocol/openid-connect/certs}

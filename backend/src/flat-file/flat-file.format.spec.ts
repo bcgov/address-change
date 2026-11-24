@@ -1,143 +1,166 @@
 import {
   LINE_ENDING,
+  encodeFlatFileContent,
   fileStamp,
+  flatFileName,
   formatFlatFile,
-  type FlatFileRecord,
+  FlatFileFieldTooLongError,
+  type FlatFileColumn,
+  type FlatFileSourceRow,
 } from './flat-file.format'
 
-const charLength = (value: string) => [...value].length
+const columns: FlatFileColumn[] = [
+  {
+    position: 1,
+    fieldKey: 'submission_timestamp',
+    columnName: 'Submission timestamp',
+    enabled: true,
+    minWidth: 14,
+    format: 'YYYYMMDDHHmmss',
+  },
+  {
+    position: 2,
+    fieldKey: 'last_name',
+    columnName: 'Surname',
+    enabled: true,
+    minWidth: 0,
+    format: null,
+  },
+  {
+    position: 3,
+    fieldKey: 'middle_initials',
+    columnName: 'Middle initials',
+    enabled: true,
+    minWidth: 0,
+    format: null,
+  },
+  {
+    position: 4,
+    fieldKey: 'ignored',
+    columnName: 'Ignored',
+    enabled: false,
+    minWidth: 0,
+    format: null,
+  },
+]
 
-function record(
-  overrides: Partial<FlatFileRecord['person']> = {},
-  addressOverrides: Partial<FlatFileRecord['address']> = {},
-  secrets: FlatFileRecord['secrets'] = {},
-): FlatFileRecord {
+const fixedColumns: FlatFileColumn[] = [
+  {
+    position: 1,
+    fieldKey: 'submission_timestamp',
+    columnName: 'Tran Date',
+    enabled: true,
+    minWidth: 8,
+    fixedWidth: 8,
+    format: 'YYYYMMDD_VANCOUVER',
+  },
+  {
+    position: 2,
+    fieldKey: 'submission_timestamp',
+    columnName: 'Tran Time',
+    enabled: true,
+    minWidth: 6,
+    fixedWidth: 6,
+    format: 'HHmmss',
+  },
+  {
+    position: 3,
+    fieldKey: 'last_name',
+    columnName: 'Last Name',
+    enabled: true,
+    minWidth: 4,
+    fixedWidth: 4,
+    format: null,
+  },
+]
+
+function row(overrides: Partial<FlatFileSourceRow> = {}): FlatFileSourceRow {
   return {
-    request: {
-      requestId: 'request-1',
-      receivedAt: new Date('2025-05-17T02:10:24Z'),
-      effectiveDate: new Date('2025-06-01T00:00:00Z'),
-    },
-    person: {
-      firstName: 'Kathleen',
-      firstMiddleInitial: 'C',
-      secondMiddleInitial: 'J',
-      lastName: 'Svedberg',
-      dateOfBirth: new Date('1989-03-16T00:00:00Z'),
-      emailAddress: 'person@example.com',
-      daytimePhone: '2505550101',
-      driversLicenseNumberEncrypted: null,
-      heightCm: { toString: () => '183' } as never,
-      weightKg: { toString: () => '127.3' } as never,
-      phnEncrypted: null,
-      securityKeywordEncrypted: null,
-      ...overrides,
-    },
-    address: {
-      oldAddressLineOne: '7155 Dallas Dr',
-      oldAddressLineTwo: 'Unit E20',
-      oldCity: 'Kamloops',
-      oldProvince: 'BC',
-      oldPostalCode: 'V2C 4T1',
-      oldCountry: 'CA',
-      newAddressLineOne: '1128 Bentley Pl',
-      newAddressLineTwo: null,
-      newCity: 'Kamloops',
-      newProvince: 'BC',
-      newPostalCode: 'V2B5M5',
-      newCountry: 'CA',
-      isMailingAddressSame: true,
-      mailingAddressLineOne: null,
-      mailingAddressLineTwo: null,
-      mailingCity: null,
-      mailingProvince: null,
-      mailingPostalCode: null,
-      mailingCountry: null,
-      ...addressOverrides,
-    },
-    secrets,
+    request_id: 'request-1',
+    submission_timestamp: new Date('2025-05-17T02:10:24Z'),
+    last_name: 'Svedberg',
+    middle_initials: 'C J',
+    ignored: 'not output',
+    ...overrides,
   }
 }
 
 const lines = (content: string) => content.split(LINE_ENDING).slice(0, -1)
 
-describe('formatFlatFile', () => {
-  it('writes the ICBC specification as a 897-character fixed-width record', () => {
-    const [line] = lines(
-      formatFlatFile(
-        [
-          record({}, {}, {
-            driversLicenseNumber: 'A123456',
-            securityKeyword: 'blue heron',
-          }),
-        ],
-        'ICBC',
-      ),
-    )
+describe('flatFileName', () => {
+  const now = new Date('2025-05-17T02:10:24Z')
 
-    expect(charLength(line ?? '')).toBe(897)
-    expect(line?.slice(0, 29)).toBe(['20250516', '191024', '20250601', 'A123456'].join(''))
-    expect(line?.slice(29, 89)).toBe(
-      ['Svedberg'.padEnd(35), 'Kathleen'.padEnd(15), 'CJ19890316'].join(''),
-    )
-    expect(line?.slice(89, 119)).toBe(
-      ['blue heron'.padEnd(22), '183'.padEnd(3), '127.3'.padEnd(5)].join(''),
-    )
-    expect(line?.slice(119, 120)).toBe('N')
-    expect(line?.slice(120, 126)).toBe('E20'.padEnd(6))
-    expect(line?.slice(126, 132)).toBe('7155'.padEnd(6))
-    expect(line?.slice(132, 162)).toBe('Dallas'.padEnd(30))
-    expect(line?.slice(162, 168)).toBe('Dr'.padEnd(6))
-    expect(line?.slice(205, 207)).toBe('BC')
-    expect(line?.slice(207, 213)).toBe('V2C4T1')
-    expect(line?.slice(-60, -50)).toBe('2505550101')
-    expect(line?.slice(-50)).toBe('person@example.com'.padEnd(50))
+  it('builds a lower-case snake-case name with the Vancouver date', () => {
+    expect(flatFileName('ICBC', now)).toBe('acbc_requests_icbc_2025_05_16_01.txt')
   })
 
-  it('writes MSP in its specified order and exact 870-character width', () => {
-    const [line] = lines(formatFlatFile([record({}, {}, { phn: '1234567890' })], 'HEALTH'))
-
-    expect(charLength(line ?? '')).toBe(870)
-    expect(line?.slice(0, 32)).toBe(['20250516', '191024', '20250601', '1234567890'].join(''))
-    expect(line?.slice(32, 92)).toBe(
-      ['Svedberg'.padEnd(35), 'Kathleen'.padEnd(15), 'CJ19890316'].join(''),
+  it('joins words in the partner name with underscores', () => {
+    expect(flatFileName(' Health / MSP ', now, 2)).toBe(
+      'acbc_requests_health_msp_2025_05_16_02.txt',
     )
-    expect(line?.slice(92, 93)).toBe('N')
-    expect(line?.slice(93, 99)).toBe('E20'.padEnd(6))
-    expect(line?.slice(-60, -50)).toBe('2505550101')
-    expect(line?.slice(-50)).toBe('person@example.com'.padEnd(50))
-  })
-
-  it('uses the new address for mailing when the resident selected same-as-new', () => {
-    const [line] = lines(formatFlatFile([record()], 'HEALTH'))
-    const addressLength = 226
-    const newAddressStart = 92 + addressLength
-    const mailingAddressStart = newAddressStart + addressLength
-    expect(line?.slice(newAddressStart, newAddressStart + addressLength)).toBe(
-      line?.slice(mailingAddressStart, mailingAddressStart + addressLength),
-    )
-  })
-
-  it('ends each record with CRLF and emits no header', () => {
-    const content = formatFlatFile([record(), record({ lastName: 'Lee' })], 'ICBC')
-    expect(lines(content)).toHaveLength(2)
-    expect(content.endsWith(LINE_ENDING)).toBe(true)
-    expect(content.startsWith('Tran Date')).toBe(false)
-  })
-
-  it('fails rather than shifting fixed columns when a value exceeds its field width', () => {
-    expect(() =>
-      formatFlatFile([record({ lastName: 'x'.repeat(36) })], 'HEALTH'),
-    ).toThrow('Flat-file field "Last Name" has 36 characters; maximum is 35')
-  })
-
-  it('rejects unsupported partner layouts', () => {
-    expect(() => formatFlatFile([record()], 'BCSC')).toThrow('Unsupported flat-file partner: BCSC')
   })
 })
 
-describe('fileStamp', () => {
-  it('uses Vancouver local date and time', () => {
+describe('formatFlatFile', () => {
+  it('uses configured order, omits disabled columns, and emits no header by default', () => {
+    const content = formatFlatFile([row()], columns, false)
+    expect(lines(content)).toHaveLength(1)
+    expect(lines(content)[0]).toContain('20250516191024 Svedberg C J')
+    expect(content).not.toContain('Surname')
+    expect(content).not.toContain('not output')
+  })
+
+  it('includes configured names in a header row when enabled', () => {
+    const content = formatFlatFile([row()], columns, true)
+    const [header, data] = lines(content)
+    expect(header).toContain('Submission timestamp')
+    expect(header).toContain('Surname')
+    expect(data).toContain('20250516191024')
+    expect(data).toContain('Svedberg')
+    expect(data).toContain('C J')
+  })
+
+  it('pads each column to its longest value and preserves CRLF', () => {
+    const content = formatFlatFile(
+      [row({ last_name: 'Li' }), row({ last_name: 'Mandira Chengappa' })],
+      columns,
+      false,
+    )
+    const [first, second] = lines(content)
+    expect(first?.indexOf('C J')).toBe(second?.indexOf('C J'))
+    expect(content.endsWith(LINE_ENDING)).toBe(true)
+  })
+
+  it('fails clearly when a configured field is not exposed by the view', () => {
+    expect(() =>
+      formatFlatFile([row()], [{ ...columns[0]!, fieldKey: 'missing_field' }], false),
+    ).toThrow('not exposed by flat_file_source')
+  })
+
+  it('rejects empty configurations', () => {
+    expect(() => formatFlatFile([row()], [], false)).toThrow('no enabled columns')
+  })
+
+  it('writes fixed-width fields contiguously with date and time components', () => {
+    const [line] = lines(formatFlatFile([row({ last_name: 'Lee' })], fixedColumns, false))
+    expect(line).toBe('20250516191024Lee ')
+    expect(line).toHaveLength(18)
+  })
+
+  it('throws a typed error when a fixed-width field is too long', () => {
+    expect(() => formatFlatFile([row({ last_name: 'Smith' })], fixedColumns, false)).toThrow(
+      FlatFileFieldTooLongError,
+    )
+  })
+})
+
+describe('file encoding and timestamps', () => {
+  it('rejects non-ASCII characters rather than silently corrupting them', () => {
+    expect(() => encodeFlatFileContent('Sḵwx̱wú7mesh', 'US-ASCII')).toThrow('cannot be represented')
+    expect(encodeFlatFileContent('ASCII\r\n', 'US-ASCII').toString('ascii')).toBe('ASCII\r\n')
+  })
+
+  it('uses Vancouver local date and time for file timestamps', () => {
     expect(fileStamp(new Date('2025-05-17T06:30:00Z'))).toEqual({
       date: '20250516',
       time: '233000',

@@ -34,11 +34,15 @@ describe('sftp credential crypto', () => {
 
   it('loads a 32-byte base64 key and reports missing or invalid keys', () => {
     expect(
-      loadCredentialKey({ [SFTP_CREDENTIAL_KEY_ENV]: key.toString('base64') }).equals(key),
+      loadCredentialKey({
+        [SFTP_CREDENTIAL_KEY_ENV]: key.toString('base64'),
+      }).equals(key),
     ).toBe(true)
     expect(() => loadCredentialKey({})).toThrow(`${SFTP_CREDENTIAL_KEY_ENV} is not set`)
     expect(() =>
-      loadCredentialKey({ [SFTP_CREDENTIAL_KEY_ENV]: randomBytes(16).toString('base64') }),
+      loadCredentialKey({
+        [SFTP_CREDENTIAL_KEY_ENV]: randomBytes(16).toString('base64'),
+      }),
     ).toThrow('exactly 32 bytes')
   })
 })

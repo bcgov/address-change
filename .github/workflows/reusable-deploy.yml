@@ -41,13 +41,14 @@ jobs:
     environment: ${{ inputs.environment }}
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: bcgov/action-deployer-openshift@e2d60eb9cacceb89c3b97d8dcf0a2c460eea5eab # v4.2.3
         id: deploy
         with:
           file: common/openshift.init.yml
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           overwrite: true
@@ -61,6 +62,7 @@ jobs:
         uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           commands: |
@@ -82,7 +84,7 @@ jobs:
     if: inputs.environment != 'test' && inputs.environment != 'prod'
     needs: [init]
     environment: ${{ inputs.environment }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -110,6 +112,7 @@ jobs:
         with:
           file: common/openshift.database-init.yml
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           # Retain the password of an already initialized disposable database.
@@ -124,6 +127,7 @@ jobs:
         uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           commands: |
@@ -141,6 +145,7 @@ jobs:
         with:
           file: common/openshift.database.yml
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           parameters: -p DB_PVC_SIZE="256Mi"
@@ -151,12 +156,16 @@ jobs:
         uses: bcgov/action-oc-runner@111868d1fc50db0a40417ba321d865ef5c931bbd # v1.7.0
         with:
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           commands: |
             set -euo pipefail
-            oc annotate statefulset "${{ github.event.repository.name }}-${{ inputs.target }}-database" \
-              migrations-hash="${{ steps.migrations.outputs.hash }}" --overwrite
+            sts="${{ github.event.repository.name }}-${{ inputs.target }}-database"
+            if [ -n "$(oc get statefulset "$sts" -o name --ignore-not-found)" ]; then
+              oc annotate statefulset "$sts" \
+                migrations-hash="${{ steps.migrations.outputs.hash }}" --overwrite
+            fi
 
   deploy:
     name: Deploy (${{ matrix.name }})
@@ -164,7 +173,7 @@ jobs:
     needs: [init, database]
     # The database job is intentionally skipped for Patroni environments.
     if: ${{ !cancelled() && needs.init.result == 'success' && (needs.database.result == 'success' || needs.database.result == 'skipped') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     strategy:
       matrix:
@@ -187,6 +196,8 @@ jobs:
               -p OIDC_JWKS_URI="${{ vars.OIDC_JWKS_URI }}"
               -p OIDC_SUBMISSION_SCOPE="${{ vars.OIDC_SUBMISSION_SCOPE }}"
               -p ENCRYPTION_KEY_ID="${{ vars.ENCRYPTION_KEY_ID }}"
+              -p FLAT_FILE_JOB_SUSPEND="${{ vars.FLAT_FILE_JOB_SUSPEND || 'true' }}"
+              -p ALLOW_DATA_RESET="${{ inputs.environment != 'prod' && 'true' || 'false' }}"
           - name: frontend
             file: frontend/openshift.deploy.yml
             parameters: >-
@@ -194,6 +205,7 @@ jobs:
               -p OIDC_AUTHORITY="${{ vars.OIDC_ISSUER }}"
               -p OIDC_CLIENT_ID="${{ vars.OIDC_AUDIENCE }}"
               -p OIDC_SCOPE="openid profile email ${{ vars.OIDC_SUBMISSION_SCOPE }}"
+              -p ALLOW_DATA_RESET="${{ inputs.environment != 'prod' && 'true' || 'false' }}"
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
     steps:
@@ -202,6 +214,7 @@ jobs:
         with:
           file: ${{ matrix.file }}
           oc_namespace: ${{ vars.OC_NAMESPACE }}
+          oc_login_attempts: 7
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
           debug: true

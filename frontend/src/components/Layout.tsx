@@ -10,7 +10,15 @@ const Layout: FC<Props> = ({ children }) => {
   const { isAuthenticated, user, signOut } = useAuth()
   return (
     <div className="d-flex flex-column min-vh-100">
-      <Header title="Address Change" titleElement="h1">
+      <Header
+        skipLinks={[
+          <a href="#main-content" key="skip-main">
+            Skip to main content
+          </a>,
+        ]}
+        title="Address Change"
+        titleElement="h1"
+      >
         <div className="app-header-actions">
           {isAuthenticated && (
             <>

@@ -61,6 +61,9 @@ parameters:
   - name: SFTP_SECRET
     description: Secret holding SFTP_CREDENTIAL_ENCRYPTION_KEY (base64, 32 bytes); created manually per namespace
     value: address-change-sftp
+  - name: S3_SECRET
+    description: Optional Secret with bucket, endpoint, region, and AWS credential keys
+    value: address-change-s3
   - name: OIDC_ISSUER
     description: OIDC issuer URL used to validate access tokens
     required: true
@@ -79,6 +82,12 @@ parameters:
   - name: APP_SECRET
     description: Pre-created Secret holding ADDRESS_CHANGE_ENCRYPTION_KEYS
     value: address-change-app
+  - name: ALLOW_DATA_RESET
+    description: Enables the resident self-service data deletion route; must be "false" in production
+    value: "false"
+  - name: FLAT_FILE_JOB_SUSPEND
+    description: Set false only in environments configured for partner deliveries
+    value: "true"
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -185,7 +194,7 @@ objects:
               ports:
                 - name: http
                   containerPort: 3000
-              env:
+              env: &backend-environment
                 - name: LOG_LEVEL
                   value: ${LOG_LEVEL}
                 - name: POSTGRES_HOST
@@ -214,6 +223,36 @@ objects:
                       name: ${SFTP_SECRET}
                       key: SFTP_CREDENTIAL_ENCRYPTION_KEY
                       optional: true
+                - name: FLAT_FILE_S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: FLAT_FILE_S3_BUCKET
+                      optional: true
+                - name: AWS_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: AWS_REGION
+                      optional: true
+                - name: FLAT_FILE_S3_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: FLAT_FILE_S3_ENDPOINT
+                      optional: true
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: AWS_ACCESS_KEY_ID
+                      optional: true
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${S3_SECRET}
+                      key: AWS_SECRET_ACCESS_KEY
+                      optional: true
                 - name: OIDC_ISSUER
                   value: ${OIDC_ISSUER}
                 - name: OIDC_AUDIENCE
@@ -224,6 +263,8 @@ objects:
                   value: ${OIDC_SUBMISSION_SCOPE}
                 - name: ADDRESS_CHANGE_ENCRYPTION_KEY_ID
                   value: ${ENCRYPTION_KEY_ID}
+                - name: ALLOW_DATA_RESET
+                  value: "${ALLOW_DATA_RESET}"
                 - name: ADDRESS_CHANGE_ENCRYPTION_KEYS
                   valueFrom:
                     secretKeyRef:
@@ -274,6 +315,63 @@ objects:
               emptyDir:
                 medium: Memory
                 sizeLimit: 256Mi
+  - apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      name: ${NAME}-${ZONE}-flat-files
+      labels:
+        app: ${NAME}-${ZONE}
+    spec:
+      schedule: "0 19-23 * * *"
+      timeZone: America/Vancouver
+      suspend: ${{FLAT_FILE_JOB_SUSPEND}}
+      concurrencyPolicy: Forbid
+      startingDeadlineSeconds: 300
+      successfulJobsHistoryLimit: 1
+      failedJobsHistoryLimit: 5
+      jobTemplate:
+        spec:
+          backoffLimit: 0
+          activeDeadlineSeconds: 1200
+          ttlSecondsAfterFinished: 86400
+          template:
+            metadata:
+              labels:
+                app: ${NAME}-${ZONE}
+                worker: ${NAME}-${ZONE}-flat-files
+                database-client: ${DB_CLIENT}
+            spec:
+              restartPolicy: Never
+              terminationGracePeriodSeconds: 30
+              automountServiceAccountToken: false
+              containers:
+                - name: flat-files
+                  image: ${REGISTRY}/${ORG_NAME}/${NAME}/${COMPONENT}:${IMAGE_TAG}
+                  imagePullPolicy: Always
+                  command: ["node", "/app/dist/flat-file/run-flat-files.js"]
+                  env: *backend-environment
+                  resources:
+                    requests:
+                      cpu: ${CPU_REQUEST}
+                      memory: ${MEMORY_REQUEST}
+                    limits:
+                      memory: ${MEMORY_LIMIT}
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    runAsNonRoot: true
+                    readOnlyRootFilesystem: true
+                    capabilities:
+                      drop: ["ALL"]
+                    seccompProfile:
+                      type: RuntimeDefault
+                  volumeMounts:
+                    - name: tmp
+                      mountPath: /tmp
+              volumes:
+                - name: tmp
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 256Mi
   - apiVersion: v1
     kind: Service
     metadata:

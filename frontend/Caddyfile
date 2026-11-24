@@ -24,7 +24,7 @@
 	# Runtime OIDC settings so one image works in every environment
 	handle /config.json {
 		header Content-Type application/json
-		respond `{"oidcAuthority":"{$OIDC_AUTHORITY:}","oidcClientId":"{$OIDC_CLIENT_ID:}","oidcScope":"{$OIDC_SCOPE:}"}` 200
+		respond `{"oidcAuthority":"{$OIDC_AUTHORITY:}","oidcClientId":"{$OIDC_CLIENT_ID:}","oidcScope":"{$OIDC_SCOPE:}","allowDataReset":{$ALLOW_DATA_RESET:false}}` 200
 	}
 	file_server
 	@spa_router {
@@ -38,6 +38,28 @@
 	reverse_proxy /api* {$BACKEND_URL} {
 		header_up Host {http.reverse_proxy.upstream.hostport}
 		header_up X-Real-IP {remote_host}
+	}
+	# Backend unreachable (connection refused, timeout, no healthy upstream)
+	handle_errors {
+		@unavailable `{err.status_code} in [502, 503, 504]`
+		handle @unavailable {
+			header {
+				-Server
+				Cache-Control "no-store"
+				Retry-After "30"
+				X-Content-Type-Options "nosniff"
+			}
+			@api path /api*
+			handle @api {
+				header Content-Type application/json
+				respond `{"message":"Service unavailable"}` 503
+			}
+			handle {
+				root * /etc/caddy/errors
+				rewrite * /unavailable.html
+				file_server
+			}
+		}
 	}
 	header {
 		-Server

@@ -1,5 +1,5 @@
 # Build static assets (SPA)
-FROM node:24-slim AS static
+FROM node:26.13.1-bookworm-slim AS static
 
 # Copy, build static files; see .dockerignore for exclusions
 WORKDIR /app
@@ -7,7 +7,7 @@ COPY . ./
 RUN npm run deploy
 
 # Build custom Caddy binary with Coraza WAF plugin
-FROM caddy:2.11.6-builder AS caddy
+FROM caddy:2.11.8-builder AS caddy
 # Install CA certificates for Go module downloads; libcap for setcap
 RUN apk add --no-cache ca-certificates libcap
 RUN xcaddy build \
@@ -18,7 +18,7 @@ RUN setcap -r /usr/bin/caddy
 # Deploy: use Alpine (not caddy:2.10.2-alpine) because we use our own custom Caddy
 # binary from the caddy stage—we never use the Caddy image's binary. Plain Alpine
 # keeps dependencies explicit and avoids coupling to the Caddy image's layout.
-FROM alpine:3.24.2
+FROM alpine:3.24.4
 RUN apk add --no-cache ca-certificates
 
 # Copy custom Caddy binary (capabilities already stripped in caddy stage; satisfies KSV022)
@@ -28,6 +28,7 @@ COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY --from=static /app/dist /srv
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY coraza.conf /etc/caddy/coraza.conf
+COPY errors /etc/caddy/errors
 
 # Set permissions for static files (OpenShift-compatible)
 # OpenShift uses random UIDs but assigns them to root group (GID 0)

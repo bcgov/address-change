@@ -19,7 +19,7 @@ export const COLLECTION_NOTICE: { heading: string; body: string[] }[] = [
   {
     heading: 'How your information is used and shared',
     body: [
-      'We use your information to verify your identity and to send your new address to each service you select on the “Who needs to know?” step. Each selected service receives only the information it needs to update your record.',
+      'We use your information to verify your identity and to send your new address to each service you select on the “Partner details” step. Each selected service receives only the information it needs to update your record.',
       'Your information is stored securely in Canada and is retained only as long as needed to complete your request and meet record-keeping requirements.',
     ],
   },

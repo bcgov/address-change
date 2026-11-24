@@ -12,9 +12,9 @@ Run from the repository root. Never read `.env` files and never install tools au
 1. Read `.agents/local/preferences.json` (ignored by git, per user), e.g. `{"startMethod": "docker"}` or `{"startMethod": "launch"}`.
 2. If it is missing, or the user asks to change it, ask which they use and save it:
    - `docker`: everything in containers with Docker Compose.
-   - `launch`: database and migrations in Docker, backend and frontend as local Node 22 processes from `.vscode/launch.json` ("Debug full stack").
+   - `launch`: database and migrations in Docker, backend and frontend as local Node 26 processes from `.vscode/launch.json` ("Debug full stack").
 3. If the user states a preference in the request ("use docker this time"), follow it. Update the file only when they want it remembered.
-4. If the preferred tooling is unavailable (Docker not running, Node 22 missing), report that and offer the other method; do not switch silently.
+4. If the preferred tooling is unavailable (Docker not running, Node 26 missing), report that and offer the other method; do not switch silently.
 
 ## Docker
 
@@ -24,7 +24,8 @@ Run from the repository root. Never read `.env` files and never install tools au
 
 ## Launch
 
-- Prepare the database like the "Prepare local database" task: `docker compose up --detach database`, then `docker compose run --rm migrations`.
+- Before first launch and after schema changes, explicitly run the "Prepare local database" task: `docker compose up --detach database`, then `docker compose run --rm migrations`. "Debug full stack" does not run this task automatically.
+- For normal debugger restarts, reuse the running database and do not rerun migrations. If the database is stopped, run "Start local database" first.
 - Start backend (`npm run start:dev` in `backend/`, port 3001) and frontend (`npm run dev` in `frontend/`, port 3000) with the `env` values in `.vscode/launch.json`, as long-running background processes. Debugger attachment is a VS Code action; tell the user to press F5 on "Debug full stack" if they want breakpoints.
 - Restart: stop only the processes you started, then start them again.
 

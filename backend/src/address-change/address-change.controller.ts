@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   HttpCode,
@@ -15,11 +16,13 @@ import {
 import { ADDRESS_CHANGE_PATH, API_VERSION, addressChangeContract } from './address-change.contract'
 import type {
   AddressChangeAcknowledgement,
+  AddressChangeDeletion,
   AddressChangeDraft,
   AddressChangeDraftResponse,
   AddressChangeRequest,
   AddressChangeSummary,
 } from './address-change.contract'
+import { badRequestProblem } from '../common/problem-details'
 import { ZodValidationPipe } from '../common/zod-validation.pipe'
 import { AddressChangeService } from './address-change.service'
 import { AccessTokenGuard } from '../auth/access-token.guard'
@@ -37,6 +40,13 @@ export class AddressChangeController {
   @HttpCode(HttpStatus.OK)
   list(@Req() request: AuthenticatedRequest): Promise<AddressChangeSummary[]> {
     return this.service.list(request.ownerSub)
+  }
+
+  @Delete('me')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.OK)
+  deleteOwnData(@Req() request: AuthenticatedRequest): Promise<AddressChangeDeletion> {
+    return this.service.deleteOwnData(request.ownerSub)
   }
 
   @Put('drafts')
@@ -57,10 +67,42 @@ export class AddressChangeController {
   @Header('Vary', 'Authorization')
   @HttpCode(HttpStatus.OK)
   getDraft(
-    @Param('requestId', new ParseUUIDPipe()) requestId: string,
+    @Param(
+      'requestId',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          badRequestProblem(
+            'Invalid request identifier',
+            [{ path: ['requestId'], code: 'invalid_string' }],
+            'path',
+          ),
+      }),
+    )
+    requestId: string,
     @Req() request: AuthenticatedRequest,
   ): Promise<AddressChangeDraftResponse> {
     return this.service.getDraft(requestId, request.ownerSub)
+  }
+
+  @Delete('drafts/:requestId')
+  @UseGuards(AccessTokenGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteDraft(
+    @Param(
+      'requestId',
+      new ParseUUIDPipe({
+        exceptionFactory: () =>
+          badRequestProblem(
+            'Invalid request identifier',
+            [{ path: ['requestId'], code: 'invalid_string' }],
+            'path',
+          ),
+      }),
+    )
+    requestId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<void> {
+    return this.service.deleteDraft(requestId, request.ownerSub)
   }
 
   @Post()
