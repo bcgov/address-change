@@ -227,7 +227,9 @@ export class FlatFileService {
       const enabledColumns = snapshot.columns.filter((column) => column.enabled)
       const fixedWidthLayout =
         enabledColumns.length > 0 &&
-        enabledColumns.every((column) => column.fixedWidth !== null && column.fixedWidth !== undefined)
+        enabledColumns.every(
+          (column) => column.fixedWidth !== null && column.fixedWidth !== undefined,
+        )
       let output: string
       let recordCount = records.length
       if (fixedWidthLayout) {
@@ -267,7 +269,13 @@ export class FlatFileService {
               updatedBy: FLAT_FILE_ACTOR,
             },
           })
-          return { partnerCode: partner.partnerCode, batchId, status: 'FAILED', recordCount: 0, fileName }
+          return {
+            partnerCode: partner.partnerCode,
+            batchId,
+            status: 'FAILED',
+            recordCount: 0,
+            fileName,
+          }
         }
         output = `${snapshot.includeHeader ? formatFlatFileHeader(snapshot.columns) : ''}${lines.join('')}`
         recordCount = lines.length

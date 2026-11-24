@@ -66,15 +66,14 @@ const charLength = (value: string): number => [...value].length
 
 export class FlatFileFieldTooLongError extends Error {
   constructor(fieldKey: string, columnName: string, length: number, width: number) {
-    super(`Flat-file field "${columnName}" (${fieldKey}) has ${length} characters; maximum is ${width}`)
+    super(
+      `Flat-file field "${columnName}" (${fieldKey}) has ${length} characters; maximum is ${width}`,
+    )
     this.name = 'FlatFileFieldTooLongError'
   }
 }
 
-function renderFixedRow(
-  values: readonly string[],
-  columns: readonly FlatFileColumn[],
-): string {
+function renderFixedRow(values: readonly string[], columns: readonly FlatFileColumn[]): string {
   return (
     values
       .map((value, index) => {
@@ -115,7 +114,10 @@ export function formatFlatFileHeader(columns: readonly FlatFileColumn[]): string
   if (!enabled.every((column) => column.fixedWidth !== null && column.fixedWidth !== undefined)) {
     throw new Error('Fixed-width flat-file header requires fixed-width columns')
   }
-  return renderFixedRow(enabled.map((column) => column.columnName), enabled)
+  return renderFixedRow(
+    enabled.map((column) => column.columnName),
+    enabled,
+  )
 }
 
 export function formatFlatFile(

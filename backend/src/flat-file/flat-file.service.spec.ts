@@ -322,9 +322,7 @@ describe('FlatFileService.generateForPartner', () => {
     const stored = prisma.flatFileBatch.update.mock.calls.find(
       ([args]) => args.data.fileContent !== undefined,
     )?.[0].data
-    expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(
-      `KamloopsKamloops${'\r\n'}`,
-    )
+    expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`KamloopsKamloops${'\r\n'}`)
   })
 
   it('skips partners with no pending operations', async () => {
