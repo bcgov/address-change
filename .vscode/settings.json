@@ -13,5 +13,8 @@
   "sonarlint.connectedMode.project": {
     "connectionId": "bcgov-sonarcloud",
     "projectKey": "bcgov_address-change2"
+  },
+  "[sql]": {
+    "editor.defaultFormatter": "inferrinizzard.prettier-sql-vscode"
   }
 }

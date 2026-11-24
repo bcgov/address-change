@@ -61,9 +61,12 @@ parameters:
   - name: SFTP_SECRET
     description: Secret holding SFTP_CREDENTIAL_ENCRYPTION_KEY (base64, 32 bytes); created manually per namespace
     value: address-change-sftp
-  - name: S3_SECRET
-    description: Optional Secret with bucket, endpoint, region, and AWS credential keys
-    value: address-change-s3
+  - name: VAULT_S3_PATH
+    description: KV v2 API path for this environment's S3 settings
+    required: true
+  - name: VAULT_ROLE
+    description: Platform Vault role (b5cfc6-nonprod or b5cfc6-prod)
+    required: true
   - name: OIDC_ISSUER
     description: OIDC issuer URL used to validate access tokens
     required: true
@@ -106,11 +109,31 @@ objects:
           maxSurge: 1
       template:
         metadata:
+          annotations: &vault-runtime-annotations
+            vault.hashicorp.com/agent-inject: "true"
+            vault.hashicorp.com/agent-inject-token: "false"
+            vault.hashicorp.com/agent-pre-populate-only: "true"
+            vault.hashicorp.com/agent-init-first: "true"
+            vault.hashicorp.com/agent-service-account-token-volume-name: vault-auth-token
+            vault.hashicorp.com/auth-path: auth/k8s-gold
+            vault.hashicorp.com/namespace: platform-services
+            vault.hashicorp.com/role: ${VAULT_ROLE}
+            vault.hashicorp.com/agent-requests-cpu: "10m"
+            vault.hashicorp.com/agent-limits-cpu: "50m"
+            vault.hashicorp.com/agent-requests-mem: "25Mi"
+            vault.hashicorp.com/agent-limits-mem: "100Mi"
+            vault.hashicorp.com/agent-inject-secret-s3.json: ${VAULT_S3_PATH}
+            vault.hashicorp.com/agent-inject-template-s3.json: |
+              {{- with secret "${VAULT_S3_PATH}" -}}
+              {{ .Data.data | toJSON }}
+              {{- end }}
           labels:
             app: ${NAME}-${ZONE}
             deployment: ${NAME}-${ZONE}-${COMPONENT}
             database-client: ${DB_CLIENT}
         spec:
+          serviceAccountName: b5cfc6-vault
+          automountServiceAccountToken: false
           terminationGracePeriodSeconds: 30
           affinity:
             podAntiAffinity:
@@ -194,7 +217,12 @@ objects:
               ports:
                 - name: http
                   containerPort: 3000
+              command: ["node", "--require", "/app/load-vault-env.cjs", "/app/dist/main"]
               env: &backend-environment
+                - name: VAULT_ENV_FILES
+                  value: '["/vault/secrets/s3.json"]'
+                - name: VAULT_REQUIRED_KEYS
+                  value: '["AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","FLAT_FILE_S3_BUCKET","FLAT_FILE_S3_ENDPOINT"]'
                 - name: LOG_LEVEL
                   value: ${LOG_LEVEL}
                 - name: POSTGRES_HOST
@@ -222,36 +250,6 @@ objects:
                     secretKeyRef:
                       name: ${SFTP_SECRET}
                       key: SFTP_CREDENTIAL_ENCRYPTION_KEY
-                      optional: true
-                - name: FLAT_FILE_S3_BUCKET
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: FLAT_FILE_S3_BUCKET
-                      optional: true
-                - name: AWS_REGION
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: AWS_REGION
-                      optional: true
-                - name: FLAT_FILE_S3_ENDPOINT
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: FLAT_FILE_S3_ENDPOINT
-                      optional: true
-                - name: AWS_ACCESS_KEY_ID
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: AWS_ACCESS_KEY_ID
-                      optional: true
-                - name: AWS_SECRET_ACCESS_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: AWS_SECRET_ACCESS_KEY
                       optional: true
                 - name: OIDC_ISSUER
                   value: ${OIDC_ISSUER}
@@ -311,6 +309,12 @@ objects:
                     # distroless/nodejs has no /bin/sleep; exec hooks skip image ENTRYPOINT
                     command: ["/nodejs/bin/node", "-e", "setTimeout(() => {}, 10000)"]
           volumes:
+            - name: vault-auth-token
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      expirationSeconds: 600
             - name: tmp
               emptyDir:
                 medium: Memory
@@ -336,6 +340,7 @@ objects:
           ttlSecondsAfterFinished: 86400
           template:
             metadata:
+              annotations: *vault-runtime-annotations
               labels:
                 app: ${NAME}-${ZONE}
                 worker: ${NAME}-${ZONE}-flat-files
@@ -343,12 +348,13 @@ objects:
             spec:
               restartPolicy: Never
               terminationGracePeriodSeconds: 30
+              serviceAccountName: b5cfc6-vault
               automountServiceAccountToken: false
               containers:
                 - name: flat-files
                   image: ${REGISTRY}/${ORG_NAME}/${NAME}/${COMPONENT}:${IMAGE_TAG}
                   imagePullPolicy: Always
-                  command: ["node", "/app/dist/flat-file/run-flat-files.js"]
+                  command: ["node", "--require", "/app/load-vault-env.cjs", "/app/dist/flat-file/run-flat-files.js"]
                   env: *backend-environment
                   resources:
                     requests:
@@ -368,6 +374,12 @@ objects:
                     - name: tmp
                       mountPath: /tmp
               volumes:
+                - name: vault-auth-token
+                  projected:
+                    sources:
+                      - serviceAccountToken:
+                          path: token
+                          expirationSeconds: 600
                 - name: tmp
                   emptyDir:
                     medium: Memory
