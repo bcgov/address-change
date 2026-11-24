@@ -36,6 +36,12 @@ def backend(environment):
         DB_PASSWORD_KEY='password' if patroni else 'database-password',
         DB_SSLMODE='require' if patroni else 'disable',
         DB_CLIENT='address-change' if patroni else 'disposable',
+        OIDC_ISSUER='https://issuer.invalid', OIDC_AUDIENCE='fixture',
+        OIDC_JWKS_URI='https://issuer.invalid/jwks', OIDC_SUBMISSION_SCOPE='fixture',
+        ENCRYPTION_KEY_ID='v1',
+        VAULT_ROLE='b5cfc6-prod' if environment == 'prod' else 'b5cfc6-nonprod',
+        VAULT_S3_PATH=('b5cfc6-prod' if environment == 'prod' else 'b5cfc6-nonprod')
+        + f'/data/address-change-api-{environment}/address-change-s3',
     )[0]['spec']['template']
 
 
@@ -49,7 +55,15 @@ class DatabaseTemplates(unittest.TestCase):
         for target in ('test', 'prod'):
             with self.subTest(target=target):
                 pod = backend(target)
+                self.assertEqual(pod['spec']['serviceAccountName'], 'b5cfc6-vault')
+                annotations = pod['metadata']['annotations']
+                self.assertEqual(annotations['vault.hashicorp.com/agent-init-first'], 'true')
+                mount = 'b5cfc6-prod' if target == 'prod' else 'b5cfc6-nonprod'
+                self.assertEqual(annotations['vault.hashicorp.com/agent-inject-secret-s3.json'],
+                                 f'{mount}/data/address-change-api-{target}/address-change-s3')
+                self.assertIn('/app/load-vault-env.cjs', pod['spec']['containers'][0]['command'])
                 runtime = env(pod['spec']['containers'][0])
+                self.assertNotIn('AWS_SECRET_ACCESS_KEY', runtime)
                 migration = env(pod['spec']['initContainers'][1])
                 self.assertEqual(runtime['POSTGRES_HOST']['value'], 'address-change-db-patroni')
                 self.assertEqual(runtime['POSTGRES_DATABASE']['value'], 'address_change')
