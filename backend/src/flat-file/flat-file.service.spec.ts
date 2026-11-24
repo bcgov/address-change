@@ -325,6 +325,54 @@ describe('FlatFileService.generateForPartner', () => {
     expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`KamloopsKamloops${'\r\n'}`)
   })
 
+  it('exposes separate middle initials for partner layout columns', async () => {
+    const initialColumns = [
+      {
+        position: 1,
+        fieldKey: 'first_middle_initial',
+        columnName: '1st Initial',
+        enabled: true,
+        minWidth: 1,
+        fixedWidth: 1,
+        format: null,
+      },
+      {
+        position: 2,
+        fieldKey: 'second_middle_initial',
+        columnName: '2nd Initial',
+        enabled: true,
+        minWidth: 1,
+        fixedWidth: 1,
+        format: null,
+      },
+    ]
+    const { service, prisma } = setup(
+      ['r-initials'],
+      [{ id: 'o-initials' }],
+      [
+        {
+          request_id: 'r-initials',
+          first_middle_initial: 'C',
+          second_middle_initial: 'J',
+        },
+      ],
+      1,
+      initialColumns,
+    )
+
+    await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
+      status: 'READY',
+      recordCount: 1,
+    })
+    const stored = prisma.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
+    expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`CJ${'\r\n'}`)
+    const sourceQuery = prisma.$queryRaw.mock.calls[0]?.[0].join('')
+    expect(sourceQuery).toContain('person.first_middle_initial')
+    expect(sourceQuery).toContain('person.second_middle_initial')
+  })
+
   it('skips partners with no pending operations', async () => {
     const { service, tx } = setup([], [])
     await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
