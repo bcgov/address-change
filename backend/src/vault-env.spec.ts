@@ -62,7 +62,9 @@ describe('Vault environment loader', () => {
       load({ '/vault/fixture.json': `{"KEY":"${credential}" BROKEN}` })
       throw new Error('Expected the loader to reject malformed JSON')
     } catch (error) {
-      expect(String(error)).toBe('Error: Invalid JSON in Vault environment file /vault/fixture.json')
+      expect(String(error)).toBe(
+        'Error: Invalid JSON in Vault environment file /vault/fixture.json',
+      )
       expect(String((error as Error).stack)).not.toContain(credential)
       expect((error as Error & { cause?: unknown }).cause).toBeUndefined()
     }
