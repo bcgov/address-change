@@ -1,4 +1,5 @@
 import type { Control, FieldValues, Path } from 'react-hook-form'
+import { TextField } from '@bcgov/design-system-react-components'
 import AddressSearch from './AddressSearch'
 import FormField from './FormField'
 import FormSection from './FormSection'
@@ -73,7 +74,9 @@ export default function AddressFields<T extends FieldValues>({
           label="Postal code"
           name={path('postalCode')}
         />
-        {lockToBritishColumbia && <p className="address-province">British Columbia, Canada</p>}
+        {lockToBritishColumbia && (
+          <TextField isDisabled label="Province" value="British Columbia" />
+        )}
       </div>
     </FormSection>
   )

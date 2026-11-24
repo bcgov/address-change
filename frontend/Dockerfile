@@ -28,6 +28,7 @@ COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 COPY --from=static /app/dist /srv
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY coraza.conf /etc/caddy/coraza.conf
+COPY errors /etc/caddy/errors
 
 # Set permissions for static files (OpenShift-compatible)
 # OpenShift uses random UIDs but assigns them to root group (GID 0)
