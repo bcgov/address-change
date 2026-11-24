@@ -1,0 +1,137 @@
+
+ICBC specifications
+==============================
+Field #	Start Col	Columns	Name
+
+1	1	8	Tran Date (yyyymmdd)
+2	9	6	Tran Time
+3	15	8	COA Date (yyyymmdd)
+4	23	7	BCDL
+5	30	35	Last Name
+6	65	15	First Name
+7	80	1	1st Initial
+8	81	1	2nd Initial
+9	82	8	DOB (yyyymmdd)
+10	90	22	DL Security word
+11	112	3	DL Height
+12	115	5	DL Weight
+13	120	1	Old Addr Bypassed? (Y/N)
+14	121	6	Old Apt No
+15	127	6	Old St No
+16	133	30	Old Street
+17	163	6	Old St Type
+18	169	2	Old St Dir
+19	171	35	Old City
+20	206	2	Old Prov
+21	208	6	Old Postal Code
+22	214	6	Old PO Box
+23	220	30	Old Postal Station
+24	250	4	Old Site
+25	254	4	Old Compartment
+26	258	8	Old Route
+27	266	40	Additional Old line 1
+28	306	40	Additional Old line 2
+29	346	1	New Addr Bypassed? (Y/N)
+30	347	6	New Apt No
+31	353	6	New St No
+32	359	30	New Street
+33	389	6	New St Type
+34	395	2	New St Dir
+35	397	35	New City
+36	432	2	New Prov
+37	434	6	New Postal Code
+38	440	6	New PO Box
+39	446	30	New Postal Station
+40	476	4	New Site
+41	480	4	New Compartment
+42	484	8	New Route
+43	492	40	Additional New line 1
+44	532	40	Additional New line 2
+45	572	1	Mailing Addr Bypassed? (Y/N)
+46	573	6	Mailing Apt No
+47	579	6	Mailing St No
+48	585	30	Mailing Street
+49	615	6	Mailing St Type
+50	621	2	Mailing St Dir
+51	623	35	Mailing City
+52	658	2	Mailing Prov
+53	660	6	Mailing Postal Code
+54	666	6	Mailing PO Box
+55	672	30	Mailing Postal Station
+56	702	4	Mailing Site
+57	706	4	Mailing Compartment
+58	710	8	Mailing Route
+59	718	40	Additional Mailing line 1
+60	758	40	Additional Mailing line 2
+61	798	40	Additional Mailing line 2
+62	838	10	Phone Number
+63	848	50	Email Address
+
+------------------------------
+
+
+
+MSP specifications
+==============================
+Field #	Start Col	Columns	Name
+
+1	1	8	Tran Date (yyyymmdd)
+2	9	6	Tran Time (hhmmss)
+3	15	8	COA Date (yyyymmdd)
+4	23	10	PHN
+5	33	35	Last Name
+6	68	15	First Name
+7	83	1	1st Initial
+8	84	1	2nd Initial
+9	85	8	DOB (yyyymmdd)
+10	93	1	Old Addr Bypassed? (Y/N)
+11	94	6	Old Apt No
+12	100	6	Old St No
+13	106	30	Old Street
+14	136	6	Old St Type
+15	142	2	Old St Dir
+16	144	35	Old City
+17	179	2	Old Prov
+18	181	6	Old Postal Code
+19	187	6	Old PO Box
+20	193	30	Old Postal Station
+21	223	4	Old Site
+22	227	4	Old Compartment
+23	231	8	Old Route
+24	239	40	Additional Old line 1
+25	279	40	Additional Old line 2
+26	319	1	New Addr Bypassed? (Y/N)
+27	320	6	New Apt No
+28	326	6	New St No
+29	332	30	New Street
+30	362	6	New St Type
+31	368	2	New St Dir
+32	370	35	New City
+33	405	2	New Prov
+34	407	6	New Postal Code
+35	413	6	New PO Box
+36	419	30	New Postal Station
+37	449	4	New Site
+38	453	4	New Compartment
+39	457	8	New Route
+40	465	40	Additional New line 1
+41	505	40	Additional New line 2
+42	545	1	Mailing Addr Bypassed? (Y/N)
+43	546	6	Mailing Apt No
+44	552	6	Mailing St No
+45	558	30	Mailing Street
+46	588	6	Mailing St Type
+47	594	2	Mailing St Dir
+48	596	35	Mailing City
+49	631	2	Mailing Prov
+50	633	6	Mailing Postal Code
+51	639	6	Mailing PO Box
+52	645	30	Mailing Postal Station
+53	675	4	Mailing Site
+54	679	4	Mailing Compartment
+55	683	8	Mailing Route
+56	691	40	Additional Mailing line 1
+57	731	40	Additional Mailing line 2
+58	771	40	Additional Mailing line 2
+59	811	10	Phone Number
+60	821	50	Email Address

@@ -1,8 +1,14 @@
 import { createHash } from 'node:crypto'
 import { Injectable, Logger } from '@nestjs/common'
 import type { PartnerSystem, Prisma } from '../../generated/prisma/client.js'
+import { RequestEncryptionService } from '../address-change/request-encryption.service'
 import { PrismaService } from '../prisma.service'
-import { type FlatFileRecord, fileStamp, formatterFor } from './flat-file.format'
+import {
+  FlatFileFieldTooLongError,
+  type FlatFileRecord,
+  fileStamp,
+  formatFlatFileRecord,
+} from './flat-file.format.js'
 import { summarizeRequestStatus } from './request-status'
 import { SftpTransport } from './sftp.transport'
 
@@ -32,6 +38,7 @@ export class FlatFileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sftp: SftpTransport,
+    private readonly encryption: RequestEncryptionService,
   ) {}
 
   async generateAll(now = new Date()): Promise<BatchResult[]> {
@@ -64,8 +71,31 @@ export class FlatFileService {
       return { partnerCode: partner.partnerCode, batchId: null, status: 'SKIPPED', recordCount: 0 }
     }
     try {
-      const records = await this.loadRecords(batchId)
-      const content = Buffer.from(formatterFor(partner.partnerCode)(records), 'utf8')
+      const records = await this.loadRecords(batchId, partner.partnerCode)
+      const lines: string[] = []
+      const rejected: { requestId: string; reason: string }[] = []
+      for (const record of records) {
+        try {
+          lines.push(formatFlatFileRecord(record, partner.partnerCode))
+        } catch (err) {
+          if (!(err instanceof FlatFileFieldTooLongError)) throw err
+          rejected.push({ requestId: record.request.requestId, reason: err.message })
+          this.logger.warn(
+            `Omitting request ${record.request.requestId} from ${partner.partnerCode} batch ${batchId}: ${err.message}`,
+          )
+        }
+      }
+      const content = Buffer.from(lines.join(''), 'utf8')
+      if (rejected.length > 0) {
+        await this.prisma.processingOperation.updateMany({
+          where: {
+            batchId,
+            requestId: { in: rejected.map(({ requestId }) => requestId) },
+            status: 'PENDING',
+          },
+          data: { status: 'FAILED', updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
+        })
+      }
       const { date, time } = fileStamp(now)
       const fileName = `${partner.partnerCode}.Address.${date}.${time}.TXT`
       await this.prisma.flatFileBatch.update({
@@ -74,7 +104,7 @@ export class FlatFileService {
           fileName,
           fileContent: content,
           checksum: createHash('sha256').update(content).digest('hex'),
-          recordCount: records.length,
+          recordCount: lines.length,
           generatedAt: now,
           updatedAt: now,
           updatedBy: FLAT_FILE_ACTOR,
@@ -84,7 +114,7 @@ export class FlatFileService {
         partnerCode: partner.partnerCode,
         batchId,
         status: 'READY',
-        recordCount: records.length,
+        recordCount: lines.length,
         fileName,
       }
     } catch (err) {
@@ -139,7 +169,7 @@ export class FlatFileService {
     return batch.batchId
   }
 
-  private async loadRecords(batchId: string): Promise<FlatFileRecord[]> {
+  private async loadRecords(batchId: string, partnerCode: string): Promise<FlatFileRecord[]> {
     const operations = await this.prisma.processingOperation.findMany({
       where: { batchId },
       orderBy: { operationId: 'asc' },
@@ -150,7 +180,25 @@ export class FlatFileService {
       if (!person || !address) {
         throw new Error(`Operation ${operation.operationId} is missing person or address data`)
       }
-      return { request: operation.request, person, address }
+      const requestId = operation.request.requestId
+      const decrypt = (value: Uint8Array | null | undefined, field: string) =>
+        value ? this.encryption.decrypt(value, `request:${requestId}:${field}`) : ''
+      return {
+        request: operation.request,
+        person,
+        address,
+        secrets: {
+          driversLicenseNumber:
+            partnerCode === 'ICBC'
+              ? decrypt(person.driversLicenseNumberEncrypted, 'drivers_license_number')
+              : '',
+          phn: partnerCode === 'HEALTH' ? decrypt(person.phnEncrypted, 'phn') : '',
+          securityKeyword:
+            partnerCode === 'ICBC'
+              ? decrypt(person.securityKeywordEncrypted, 'security_keyword')
+              : '',
+        },
+      }
     })
   }
 
@@ -235,7 +283,7 @@ export class FlatFileService {
       data: { status: 'SENT', transferredAt: now, updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
     })
     await tx.processingOperation.updateMany({
-      where: { batchId },
+      where: { batchId, status: 'PENDING' },
       data: { status: 'SUCCEEDED', updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
     })
     const operations = await tx.processingOperation.findMany({

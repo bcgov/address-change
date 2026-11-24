@@ -7,19 +7,23 @@ import type { PrismaService } from '../prisma.service'
 const partner = { partnerId: 'p-1', partnerCode: 'ICBC' } as PartnerSystem
 const now = new Date('2025-05-17T02:10:24Z')
 
-function operation(id: string, withPerson = true) {
+function operation(id: string, withPerson = true, lastName = 'Lee') {
   return {
     operationId: id,
     request: {
+      requestId: `r-${id}`,
       receivedAt: now,
       effectiveDate: new Date('2025-06-01'),
       person: withPerson
         ? {
             firstName: 'Ann',
-            lastName: 'Lee',
+            lastName,
             dateOfBirth: new Date('1990-01-01'),
             heightCm: null,
             weightKg: null,
+            driversLicenseNumberEncrypted: null,
+            phnEncrypted: null,
+            securityKeywordEncrypted: null,
           }
         : null,
       address: {
@@ -53,12 +57,16 @@ function setup(pendingRequestIds: string[], operations: ReturnType<typeof operat
     $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
     partnerSystem: { findMany: vi.fn().mockResolvedValue([partner]) },
     flatFileBatch: { update: vi.fn() },
-    processingOperation: { findMany: vi.fn().mockResolvedValue(operations) },
+    processingOperation: {
+      findMany: vi.fn().mockResolvedValue(operations),
+      updateMany: vi.fn(),
+    },
   }
   const sftp = { upload: vi.fn() }
   const service = new FlatFileService(
     prisma as unknown as PrismaService,
     sftp as unknown as SftpTransport,
+    { decrypt: vi.fn().mockReturnValue('') } as never,
   )
   return { service, prisma, tx, sftp }
 }
@@ -98,6 +106,28 @@ describe('FlatFileService.generateForPartner', () => {
     expect(stored.recordCount).toBe(2)
     expect(stored.checksum).toBe(createHash('sha256').update(stored.fileContent).digest('hex'))
     expect(Buffer.from(stored.fileContent).toString('utf8').split('\r\n')).toHaveLength(3)
+  })
+
+  it('omits oversized rows, marks those operations FAILED, and generates the other rows', async () => {
+    const valid = operation('o-valid')
+    const oversized = operation('o-oversized', true, 'x'.repeat(36))
+    const { service, prisma } = setup(['r-o-valid', 'r-o-oversized'], [valid, oversized])
+
+    const result = await service.generateForPartner(partner, now)
+
+    expect(result).toMatchObject({ status: 'READY', recordCount: 1 })
+    const saved = prisma.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
+    expect(Buffer.from(saved.fileContent).toString('utf8').split('\r\n')).toHaveLength(2)
+    expect(prisma.processingOperation.updateMany).toHaveBeenCalledWith({
+      where: {
+        batchId: 'b-1',
+        requestId: { in: ['r-o-oversized'] },
+        status: 'PENDING',
+      },
+      data: { status: 'FAILED', updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
+    })
   })
 
   it('marks the batch FAILED when a record cannot be built', async () => {
@@ -143,6 +173,7 @@ describe('FlatFileService transfer', () => {
     const service = new FlatFileService(
       prisma as unknown as PrismaService,
       { upload } as unknown as SftpTransport,
+      { decrypt: vi.fn().mockReturnValue('') } as never,
     )
     return { service, prisma, tx }
   }
@@ -179,7 +210,10 @@ describe('FlatFileService transfer', () => {
       expect.objectContaining({ data: expect.objectContaining({ status: 'SENT' }) }),
     )
     expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCEEDED' }) }),
+      expect.objectContaining({
+        where: { batchId: 'b-1', status: 'PENDING' },
+        data: expect.objectContaining({ status: 'SUCCEEDED' }),
+      }),
     )
     expect(tx.addressChangeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'COMPLETED' }) }),
