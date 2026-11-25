@@ -410,9 +410,10 @@ export class FlatFileService {
     columns: readonly FlatFileColumn[],
   ): Promise<FlatFileSourceRow[]> {
     const records = await this.prisma.$queryRaw<FlatFileSourceRow[]>`
-      SELECT source.*, person.first_middle_initial, person.second_middle_initial
+      SELECT source.*,
+        split_part(source.middle_initials, ' ', 1) AS first_middle_initial,
+        NULLIF(split_part(source.middle_initials, ' ', 2), '') AS second_middle_initial
       FROM address_change.flat_file_source source
-      JOIN address_change.request_person person USING (request_id)
       JOIN address_change.processing_operation operation USING (request_id)
       WHERE operation.batch_id = ${batchId}::uuid
       ORDER BY source.submission_timestamp, source.request_id`

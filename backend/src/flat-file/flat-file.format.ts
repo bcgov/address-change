@@ -24,24 +24,24 @@ const timestampFormat = new Intl.DateTimeFormat('en-CA', {
   hourCycle: 'h23',
 })
 
+function vancouverDateParts(value: Date): Record<string, string> {
+  return Object.fromEntries(
+    timestampFormat.formatToParts(value).map((part) => [part.type, part.value]),
+  )
+}
+
 function renderDate(value: Date, format: string): string {
   if (format === 'YYYYMMDD') return value.toISOString().slice(0, 10).replaceAll('-', '')
   if (format === 'YYYYMMDD_VANCOUVER') {
-    const parts = Object.fromEntries(
-      timestampFormat.formatToParts(value).map((part) => [part.type, part.value]),
-    )
+    const parts = vancouverDateParts(value)
     return `${parts.year}${parts.month}${parts.day}`
   }
   if (format === 'HHmmss') {
-    const parts = Object.fromEntries(
-      timestampFormat.formatToParts(value).map((part) => [part.type, part.value]),
-    )
+    const parts = vancouverDateParts(value)
     return `${parts.hour}${parts.minute}${parts.second}`
   }
   if (format === 'YYYYMMDDHHmmss') {
-    const parts = Object.fromEntries(
-      timestampFormat.formatToParts(value).map((part) => [part.type, part.value]),
-    )
+    const parts = vancouverDateParts(value)
     return `${parts.year}${parts.month}${parts.day}${parts.hour}${parts.minute}${parts.second}`
   }
   throw new Error(`Unsupported flat-file date format: ${format}`)
@@ -192,9 +192,7 @@ export function encodeFlatFileContent(content: string, encoding: string): Buffer
 }
 
 export function fileStamp(now: Date): { date: string; time: string } {
-  const parts = Object.fromEntries(
-    timestampFormat.formatToParts(now).map((part) => [part.type, part.value]),
-  )
+  const parts = vancouverDateParts(now)
   const value = `${parts.year}${parts.month}${parts.day}${parts.hour}${parts.minute}${parts.second}`
   return { date: value.slice(0, 8), time: value.slice(8) }
 }

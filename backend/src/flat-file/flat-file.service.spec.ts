@@ -469,8 +469,8 @@ describe('FlatFileService.generateForPartner', () => {
     )?.[0].data
     expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`CJ${'\r\n'}`)
     const sourceQuery = prisma.$queryRaw.mock.calls[0]?.[0].join('')
-    expect(sourceQuery).toContain('person.first_middle_initial')
-    expect(sourceQuery).toContain('person.second_middle_initial')
+    expect(sourceQuery).toContain('split_part(source.middle_initials,')
+    expect(sourceQuery).not.toContain('JOIN address_change.request_person')
   })
 
   it('skips partners with no pending operations', async () => {
