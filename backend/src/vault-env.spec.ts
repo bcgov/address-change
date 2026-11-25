@@ -70,6 +70,31 @@ describe('Vault environment loader', () => {
     }
   })
 
+  it('uses Vault database values when explicitly replacing legacy credentials', () => {
+    const env = load(
+      { db: '{"POSTGRES_USER":"runtime","POSTGRES_PASSWORD":"vault-password"}' },
+      [],
+      {
+        VAULT_DATABASE_ENABLED: 'true',
+        VAULT_OVERRIDE_KEYS: '["POSTGRES_USER","POSTGRES_PASSWORD"]',
+        POSTGRES_USER: 'legacy',
+        POSTGRES_PASSWORD: 'legacy-password',
+      },
+    )
+    expect(env.POSTGRES_USER).toBe('runtime')
+    expect(env.POSTGRES_PASSWORD).toBe('vault-password')
+  })
+
+  it('requires both database values from Vault even if legacy credentials exist', () => {
+    expect(() =>
+      load({ db: '{}' }, [], {
+        VAULT_DATABASE_ENABLED: 'true',
+        POSTGRES_USER: 'legacy',
+        POSTGRES_PASSWORD: 'legacy',
+      }),
+    ).toThrow('missing POSTGRES_USER')
+  })
+
   it('rejects collisions with existing container configuration', () => {
     expect(() => load({ a: '{"LOG_LEVEL":"debug"}' }, [], { LOG_LEVEL: 'info' })).toThrow(
       'Vault environment variable is already configured: LOG_LEVEL',
