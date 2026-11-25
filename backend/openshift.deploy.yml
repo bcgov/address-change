@@ -143,7 +143,7 @@ objects:
               vault.hashicorp.com/agent-inject-template-db-runtime.json: |
                 {{- if eq "${VAULT_DATABASE_ENABLED}" "true" -}}
                 {{- with secret "${VAULT_DB_PATH}/runtime" -}}
-                {{ dict "POSTGRES_USER" .Data.data.username "POSTGRES_PASSWORD" .Data.data.password | toJSON }}
+                {"POSTGRES_USER": {{ .Data.data.username | toJSON }}, "POSTGRES_PASSWORD": {{ .Data.data.password | toJSON }}}
                 {{- end -}}
                 {{- else -}}
                 {}
