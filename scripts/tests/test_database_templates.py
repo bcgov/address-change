@@ -95,6 +95,20 @@ class DatabaseTemplates(unittest.TestCase):
                 self.assertIn('address-change-db-patroni 5432',
                               pod['spec']['initContainers'][0]['command'][-1])
 
+    def test_migration_credentials_have_a_dedicated_volume(self):
+        pod = backend('test')
+        annotations = pod['metadata']['annotations']
+        self.assertEqual(annotations['vault.hashicorp.com/agent-copy-volume-mounts'],
+                         'migrations')
+        self.assertEqual(annotations['vault.hashicorp.com/agent-inject-file-db-migration.json'],
+                         '../migration/db-migration.json')
+        migrations = next(c for c in pod['spec']['initContainers'] if c['name'] == 'migrations')
+        self.assertIn({'name': 'vault-migration', 'mountPath': '/vault/migration'},
+                      migrations['volumeMounts'])
+        for container in pod['spec']['containers']:
+            self.assertFalse(any(v['name'] == 'vault-migration'
+                                 for v in container.get('volumeMounts', [])))
+
     def test_pr_database_remains_isolated(self):
         pod = backend('123')
         runtime = env(pod['spec']['containers'][0])

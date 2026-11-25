@@ -148,6 +148,10 @@ objects:
                 {{- else -}}
                 {}
                 {{- end }}
+            # Copy Flyway's dedicated volume into the Vault init container only.
+            vault.hashicorp.com/agent-copy-volume-mounts: migrations
+            # Resolved relative to /vault/secrets, into the dedicated Flyway volume.
+            vault.hashicorp.com/agent-inject-file-db-migration.json: ../migration/db-migration.json
             vault.hashicorp.com/agent-inject-secret-db-migration.json: ${VAULT_DB_PATH}/migration
             vault.hashicorp.com/agent-inject-template-db-migration.json: |
               {{- if eq "${VAULT_DATABASE_ENABLED}" "true" -}}
@@ -242,6 +246,8 @@ objects:
                 seccompProfile:
                   type: RuntimeDefault
               volumeMounts:
+                - name: vault-migration
+                  mountPath: /vault/migration
                 - name: tmp
                   mountPath: /tmp
           containers:
@@ -338,6 +344,10 @@ objects:
                     # distroless/nodejs has no /bin/sleep; exec hooks skip image ENTRYPOINT
                     command: ["/nodejs/bin/node", "-e", "setTimeout(() => {}, 10000)"]
           volumes:
+            - name: vault-migration
+              emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
             - name: vault-auth-token
               projected:
                 sources:

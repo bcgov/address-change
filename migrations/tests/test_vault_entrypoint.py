@@ -10,7 +10,8 @@ WRAPPER = Path(__file__).resolve().parents[1] / 'vault-entrypoint.sh'
 
 
 class VaultEntrypointTests(unittest.TestCase):
-    def invoke(self, contents, enabled='true'):
+    def invoke(self, contents, enabled='true', username='migration',
+               password='fixture "$() password'):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             credentials = root / 'credentials.json'
@@ -25,14 +26,13 @@ class VaultEntrypointTests(unittest.TestCase):
             flyway.chmod(0o755)
             wrapper = root / 'entrypoint.sh'
             wrapper.write_text(WRAPPER.read_text()
-                               .replace('/vault/secrets/db-migration.json', str(credentials))
+                               .replace('/vault/migration/db-migration.json', str(credentials))
                                .replace('/flyway/flyway', str(flyway)))
-            password = 'fixture "$() password'
             return subprocess.run(
                 ['sh', str(wrapper), 'info'], capture_output=True, text=True,
                 env={**os.environ, 'VAULT_DATABASE_ENABLED': enabled,
                      'FLYWAY_USER': 'legacy', 'FLYWAY_PASSWORD': 'legacy',
-                     'EXPECTED_USER': 'migration' if enabled == 'true' else 'legacy',
+                     'EXPECTED_USER': username if enabled == 'true' else 'legacy',
                      'EXPECTED_PASSWORD': password if enabled == 'true' else 'legacy'},
             )
 
@@ -40,6 +40,14 @@ class VaultEntrypointTests(unittest.TestCase):
         result = self.invoke(json.dumps(
             {'username': 'migration', 'password': 'fixture "$() password'}))
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_preserves_trailing_newlines_and_sentinel_characters(self):
+        for suffix in ['\n', '\n\n', '.', '.\n']:
+            username = 'migration' + suffix
+            password = 'fixture password' + suffix
+            result = self.invoke(json.dumps({'username': username, 'password': password}),
+                                 username=username, password=password)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_pr_uses_existing_credentials_without_vault(self):
         self.assertEqual(self.invoke('not JSON', enabled='false').returncode, 0)
