@@ -159,6 +159,14 @@ describe('FlatFileService.generateForPartner', () => {
       },
       processingOperation: { updateMany: vi.fn() },
     }
+    const saveTx = {
+      flatFileBatch: { update: vi.fn() },
+      processingOperation: { updateMany: vi.fn() },
+    }
+    const nextSaveTx = {
+      flatFileBatch: { update: vi.fn() },
+      processingOperation: { updateMany: vi.fn() },
+    }
     const create = nextTx.flatFileBatch.create
     const createSpy = vi.fn((args: Parameters<typeof create>[0]) => create(args))
     nextTx.flatFileBatch.create = createSpy
@@ -166,7 +174,11 @@ describe('FlatFileService.generateForPartner', () => {
       $transaction: vi
         .fn()
         .mockImplementationOnce((callback: (tx: typeof resumeTx) => unknown) => callback(resumeTx))
-        .mockImplementationOnce((callback: (tx: typeof nextTx) => unknown) => callback(nextTx)),
+        .mockImplementationOnce((callback: (tx: typeof saveTx) => unknown) => callback(saveTx))
+        .mockImplementationOnce((callback: (tx: typeof nextTx) => unknown) => callback(nextTx))
+        .mockImplementationOnce((callback: (tx: typeof nextSaveTx) => unknown) =>
+          callback(nextSaveTx),
+        ),
       partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(columns) },
       flatFileBatch: {
         findMany: vi.fn().mockResolvedValue([{ batchId: 'b-1' }]),
@@ -190,7 +202,7 @@ describe('FlatFileService.generateForPartner', () => {
       fileName: 'acbc_requests_icbc_2025_05_16_02.txt',
     })
 
-    const resumeSave = prisma.flatFileBatch.update.mock.calls.find(
+    const resumeSave = saveTx.flatFileBatch.update.mock.calls.find(
       ([args]) => args.data.fileContent !== undefined,
     )
     expect(resumeSave?.[0]).toEqual(
@@ -256,7 +268,7 @@ describe('FlatFileService.generateForPartner', () => {
       { request_id: 'r-good', last_name: 'Lee' },
       { request_id: 'r-long', last_name: 'Smith' },
     ]
-    const { service, prisma } = setup(
+    const { service, tx } = setup(
       ['r-good', 'r-long'],
       [{ id: 'o-good' }, { id: 'o-long' }],
       rows,
@@ -268,11 +280,11 @@ describe('FlatFileService.generateForPartner', () => {
       status: 'READY',
       recordCount: 1,
     })
-    const stored = prisma.flatFileBatch.update.mock.calls.find(
+    const stored = tx.flatFileBatch.update.mock.calls.find(
       ([args]) => args.data.fileContent !== undefined,
     )?.[0].data
     expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`Lee${'\r\n'}`)
-    expect(prisma.processingOperation.updateMany).toHaveBeenCalledWith({
+    expect(tx.processingOperation.updateMany).toHaveBeenCalledWith({
       where: {
         batchId: 'b-1',
         requestId: { in: ['r-long'] },
@@ -280,6 +292,49 @@ describe('FlatFileService.generateForPartner', () => {
       },
       data: { status: 'FAILED', updatedAt: expect.any(Date), updatedBy: FLAT_FILE_ACTOR },
     })
+    const failedOperationUpdateIndex = tx.processingOperation.updateMany.mock.calls.findIndex(
+      ([args]) => args.data.status === 'FAILED',
+    )
+    expect(tx.flatFileBatch.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.processingOperation.updateMany.mock.invocationCallOrder[failedOperationUpdateIndex]!,
+    )
+  })
+
+  it('does not fail rejected operations when saving the file fails', async () => {
+    const fixedColumns = [
+      {
+        position: 1,
+        fieldKey: 'last_name',
+        columnName: 'Last Name',
+        enabled: true,
+        minWidth: 3,
+        fixedWidth: 3,
+        format: null,
+      },
+    ]
+    const { service, prisma, tx } = setup(
+      ['r-long', 'r-good'],
+      [{ id: 'o-long' }, { id: 'o-good' }],
+      [
+        { request_id: 'r-long', last_name: 'Smith' },
+        { request_id: 'r-good', last_name: 'Lee' },
+      ],
+      1,
+      fixedColumns,
+    )
+    tx.flatFileBatch.update.mockRejectedValueOnce(new Error('database write failed'))
+
+    await expect(service.generateForPartner(partner, now)).rejects.toThrow('database write failed')
+
+    expect(
+      tx.processingOperation.updateMany.mock.calls.some(([args]) => args.data.status === 'FAILED'),
+    ).toBe(false)
+    expect(prisma.flatFileBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { batchId: 'b-1' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      }),
+    )
   })
 
   it('omits a non-ASCII row in US-ASCII mode without failing the rest of the batch', async () => {
@@ -299,7 +354,7 @@ describe('FlatFileService.generateForPartner', () => {
       { request_id: 'r-french', last_name: 'Émile' },
       { request_id: 'r-ascii', last_name: 'Lee' },
     ]
-    const { service, prisma } = setup(
+    const { service, tx } = setup(
       ['r-french', 'r-ascii'],
       [{ id: 'o-french' }, { id: 'o-ascii' }],
       rows,
@@ -312,11 +367,11 @@ describe('FlatFileService.generateForPartner', () => {
       status: 'READY',
       recordCount: 1,
     })
-    const stored = prisma.flatFileBatch.update.mock.calls.find(
+    const stored = tx.flatFileBatch.update.mock.calls.find(
       ([args]) => args.data.fileContent !== undefined,
     )?.[0].data
     expect(Buffer.from(stored.fileContent).toString('ascii')).toBe(`Lee${' '.repeat(7)}\r\n`)
-    expect(prisma.processingOperation.updateMany).toHaveBeenCalledWith({
+    expect(tx.processingOperation.updateMany).toHaveBeenCalledWith({
       where: {
         batchId: 'b-1',
         requestId: { in: ['r-french'] },
@@ -347,7 +402,7 @@ describe('FlatFileService.generateForPartner', () => {
         format: null,
       },
     ]
-    const { service, prisma } = setup(
+    const { service, tx } = setup(
       ['r-shared'],
       [{ id: 'o-shared' }],
       [
@@ -364,7 +419,7 @@ describe('FlatFileService.generateForPartner', () => {
 
     await service.generateForPartner(partner, now)
 
-    const stored = prisma.flatFileBatch.update.mock.calls.find(
+    const stored = tx.flatFileBatch.update.mock.calls.find(
       ([args]) => args.data.fileContent !== undefined,
     )?.[0].data
     expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`KamloopsKamloops${'\r\n'}`)
@@ -391,7 +446,7 @@ describe('FlatFileService.generateForPartner', () => {
         format: null,
       },
     ]
-    const { service, prisma } = setup(
+    const { service, prisma, tx } = setup(
       ['r-initials'],
       [{ id: 'o-initials' }],
       [
@@ -409,7 +464,7 @@ describe('FlatFileService.generateForPartner', () => {
       status: 'READY',
       recordCount: 1,
     })
-    const stored = prisma.flatFileBatch.update.mock.calls.find(
+    const stored = tx.flatFileBatch.update.mock.calls.find(
       ([args]) => args.data.fileContent !== undefined,
     )?.[0].data
     expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`CJ${'\r\n'}`)
@@ -464,8 +519,8 @@ describe('FlatFileService.generateForPartner', () => {
       const results = await service.generateAll(now)
 
       expect(results.map((result) => result.status)).toEqual(['READY', 'READY'])
-      expect(prisma.flatFileBatch.update).toHaveBeenCalledTimes(2)
-      for (const [index, call] of prisma.flatFileBatch.update.mock.calls.entries()) {
+      expect(tx.flatFileBatch.update).toHaveBeenCalledTimes(2)
+      for (const [index, call] of tx.flatFileBatch.update.mock.calls.entries()) {
         const { generatedAt, updatedAt } = call[0].data
         // flat_file_status exposes created_at as generation_started_at.
         expect(generatedAt.getTime()).toBeGreaterThanOrEqual(generationStartedAt[index]!.getTime())
@@ -479,7 +534,7 @@ describe('FlatFileService.generateForPartner', () => {
   })
 
   it('stores the layout snapshot, exact bytes, checksum, and first/last request times', async () => {
-    const { service, prisma, tx, encryption } = setup(['r-1'], [{ id: 'o-1' }])
+    const { service, tx, encryption } = setup(['r-1'], [{ id: 'o-1' }])
 
     const result = await service.generateForPartner(partner, now)
 
@@ -508,7 +563,9 @@ describe('FlatFileService.generateForPartner', () => {
     expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { operationId: { in: ['o-1'] } } }),
     )
-    const stored = prisma.flatFileBatch.update.mock.calls[0]?.[0].data
+    const stored = tx.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
     expect(stored.recordCount).toBe(1)
     expect(stored.checksum).toBe(createHash('sha256').update(stored.fileContent).digest('hex'))
     expect(Buffer.from(stored.fileContent).toString('utf8')).toContain(

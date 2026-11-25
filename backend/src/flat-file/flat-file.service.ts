@@ -234,9 +234,9 @@ export class FlatFileService {
         )
       let output: string
       let recordCount = records.length
+      const rejectedRecords: { requestId: string; reason: string }[] = []
       if (fixedWidthLayout) {
         const lines: string[] = []
-        const rejected: { requestId: string; reason: string }[] = []
         for (const record of records) {
           try {
             const line = formatFlatFileRecord(record, snapshot.columns)
@@ -249,34 +249,33 @@ export class FlatFileService {
             ) {
               throw err
             }
-            rejected.push({ requestId: record.request_id, reason: err.message })
+            rejectedRecords.push({ requestId: record.request_id, reason: err.message })
             this.logger.warn(
               `Omitting request ${record.request_id} from ${partner.partnerCode} batch ${batchId}: ${err.message}`,
             )
           }
         }
-        if (rejected.length > 0) {
-          const rejectedAt = new Date()
-          await this.prisma.processingOperation.updateMany({
-            where: {
-              batchId,
-              requestId: { in: rejected.map(({ requestId }) => requestId) },
-              status: 'PENDING',
-            },
-            data: { status: 'FAILED', updatedAt: rejectedAt, updatedBy: FLAT_FILE_ACTOR },
-          })
-        }
         if (records.length > 0 && lines.length === 0) {
           const generatedAt = new Date()
-          await this.prisma.flatFileBatch.update({
-            where: { batchId },
-            data: {
-              status: 'FAILED',
-              generationClaimedAt: null,
-              generationLastError: 'No records fit the configured fixed-width fields.',
-              updatedAt: generatedAt,
-              updatedBy: FLAT_FILE_ACTOR,
-            },
+          await this.prisma.$transaction(async (tx) => {
+            await tx.flatFileBatch.update({
+              where: { batchId },
+              data: {
+                status: 'FAILED',
+                generationClaimedAt: null,
+                generationLastError: 'No records fit the configured fixed-width fields.',
+                updatedAt: generatedAt,
+                updatedBy: FLAT_FILE_ACTOR,
+              },
+            })
+            await tx.processingOperation.updateMany({
+              where: {
+                batchId,
+                requestId: { in: rejectedRecords.map(({ requestId }) => requestId) },
+                status: 'PENDING',
+              },
+              data: { status: 'FAILED', updatedAt: generatedAt, updatedBy: FLAT_FILE_ACTOR },
+            })
           })
           return {
             partnerCode: partner.partnerCode,
@@ -295,19 +294,31 @@ export class FlatFileService {
       const checksum = createHash('sha256').update(content).digest('hex')
       // The batch's sequence fixes its name; record actual completion time separately.
       const generatedAt = new Date()
-      await this.prisma.flatFileBatch.update({
-        where: { batchId },
-        data: {
-          fileContent: new Uint8Array(content),
-          checksum,
-          recordCount,
-          generatedAt,
-          status: 'READY',
-          generationClaimedAt: null,
-          generationLastError: null,
-          updatedAt: generatedAt,
-          updatedBy: FLAT_FILE_ACTOR,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.flatFileBatch.update({
+          where: { batchId },
+          data: {
+            fileContent: new Uint8Array(content),
+            checksum,
+            recordCount,
+            generatedAt,
+            status: 'READY',
+            generationClaimedAt: null,
+            generationLastError: null,
+            updatedAt: generatedAt,
+            updatedBy: FLAT_FILE_ACTOR,
+          },
+        })
+        if (rejectedRecords.length > 0) {
+          await tx.processingOperation.updateMany({
+            where: {
+              batchId,
+              requestId: { in: rejectedRecords.map(({ requestId }) => requestId) },
+              status: 'PENDING',
+            },
+            data: { status: 'FAILED', updatedAt: generatedAt, updatedBy: FLAT_FILE_ACTOR },
+          })
+        }
       })
       return {
         partnerCode: partner.partnerCode,
