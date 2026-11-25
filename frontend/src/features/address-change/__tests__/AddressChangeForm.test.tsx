@@ -61,7 +61,7 @@ describe('AddressChangeForm step flow', () => {
 
   test('completed steps in the progress bar navigate back', async () => {
     renderForm({ initialDraft: { idempotencyKey: 'k', step: 2, values: {} } })
-    expect(screen.queryByRole('button', { name: /Who needs to know/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Partner details/ })).not.toBeInTheDocument()
     await click('Collection notice')
     expect(await screen.findByRole('region', { name: 'Collection notice' })).toBeInTheDocument()
   })
@@ -88,7 +88,7 @@ describe('AddressChangeForm step flow', () => {
   test('disables continue on the address step until required fields are filled', async () => {
     renderForm({ initialDraft: { idempotencyKey: 'k', step: 2, values: {} } })
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
-    expect(screen.queryByText('Who needs to know?', { selector: 'h3' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Partner details', { selector: 'h3' })).not.toBeInTheDocument()
   })
 
   test('requires the mailing address when it differs from the residential address', async () => {
@@ -135,10 +135,9 @@ describe('AddressChangeForm step flow', () => {
     expect(province).toHaveValue('British Columbia')
     await click('Continue')
 
-    expect(await screen.findByRole('checkbox', { name: /BC Services Card/ })).toBeDisabled()
-    expect(screen.getByRole('checkbox', { name: /BC Services Card/ })).toBeChecked()
+    expect(await screen.findByRole('radio', { name: 'Yes' })).toBeChecked()
     expect(screen.queryByText(/Medical Services Plan/)).not.toBeInTheDocument()
-    expect(screen.getByText("Usually your mother's maiden name.")).toBeInTheDocument()
+    expect(screen.queryByText("Usually your mother's maiden name.")).not.toBeInTheDocument()
 
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
 
@@ -178,7 +177,7 @@ describe('AddressChangeForm step flow', () => {
   test('hides ICBC requirements when ICBC is unchecked', async () => {
     renderForm({ initialDraft: { idempotencyKey: 'k', step: 3, values: {} } })
     expect(await screen.findByLabelText(/Security keyword/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('checkbox', { name: /ICBC/ }))
+    await userEvent.click(screen.getByRole('radio', { name: 'No' }))
     await waitFor(() => expect(screen.queryByLabelText(/Security keyword/)).not.toBeInTheDocument())
   })
 

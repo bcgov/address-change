@@ -1,6 +1,6 @@
 import type { FC } from 'react'
-import type { Control } from 'react-hook-form'
-import { Button } from '@bcgov/design-system-react-components'
+import { Controller, type Control } from 'react-hook-form'
+import { Button, InlineAlert, Radio, RadioGroup } from '@bcgov/design-system-react-components'
 import AddressFields from '@/components/common/AddressFields'
 import CheckboxField from '@/components/common/CheckboxField'
 import FormField from '@/components/common/FormField'
@@ -135,21 +135,31 @@ export const PartnersStep: FC<{ control: FormControl; notifyIcbc: boolean }> = (
   notifyIcbc,
 }) => (
   <>
-    <FormSection
-      description="Choose which services should be told about your new address."
-      hideTitle
-      title="Who needs to know?"
-    >
-      <div className="checkbox-group">
-        <CheckboxField
-          control={control}
-          isDisabled
-          label="BC Services Card (BCSC)"
-          name="notifyBcsc"
-        />
-        <CheckboxField control={control} label="BC Drivers License (ICBC)" name="notifyIcbc" />
-      </div>
+    <FormSection hideTitle title="Partner details">
+      <Controller
+        control={control}
+        name="notifyIcbc"
+        render={({ field }) => (
+          <div className="large-radio-group">
+            <RadioGroup
+              label="Do you have a valid BC Driver’s License?"
+              name={field.name}
+              onChange={(value) => field.onChange(value === 'yes')}
+              value={field.value ? 'yes' : 'no'}
+            >
+              <Radio value="yes">Yes</Radio>
+              <Radio value="no">No</Radio>
+            </RadioGroup>
+          </div>
+        )}
+      />
     </FormSection>
+    {!notifyIcbc && (
+      <InlineAlert
+        description="If you have a BCID photo card, please go to your local ICBC or Service BC office"
+        variant="info"
+      />
+    )}
     {notifyIcbc && (
       <FormSection
         description="ICBC needs these details to match your record. Enter them exactly as they appear on your driver’s licence."
@@ -186,7 +196,6 @@ export const PartnersStep: FC<{ control: FormControl; notifyIcbc: boolean }> = (
             <FormField
               autoComplete="off"
               control={control}
-              description="Usually your mother's maiden name."
               isRequired
               isSecret
               label="Security keyword"
@@ -199,7 +208,6 @@ export const PartnersStep: FC<{ control: FormControl; notifyIcbc: boolean }> = (
     )}
   </>
 )
-
 type ReviewProps = {
   values: AddressChangeFormValues
   user: UserSummary
@@ -267,15 +275,15 @@ export const ReviewSubmitStep: FC<ReviewProps> = ({ values, user, onEdit }) => {
           ['Services to notify', partners],
           ...(values.notifyIcbc
             ? ([
-                ['Driver’s licence number', values.icbc.driversLicenseNumber],
+                ['Driverâ€™s licence number', values.icbc.driversLicenseNumber],
                 ['Height', `${values.icbc.heightCm} cm`],
                 ['Weight', `${values.icbc.weightKg} kg`],
-                ['Security keyword', '•'.repeat(Math.max(values.icbc.securityKeyword.length, 4))],
+                ['Security keyword', 'â€¢'.repeat(Math.max(values.icbc.securityKeyword.length, 4))],
               ] as [string, string][])
             : []),
         ]}
         step={3}
-        title="Who needs to know?"
+        title="Partner details"
       />
     </>
   )
@@ -283,7 +291,7 @@ export const ReviewSubmitStep: FC<ReviewProps> = ({ values, user, onEdit }) => {
 
 export const SubmittingPanel: FC = () => (
   <LoadingPanel
-    title="Submitting your request…"
+    title="Submitting your requestâ€¦"
     description="Please wait. Do not close this page."
   />
 )
