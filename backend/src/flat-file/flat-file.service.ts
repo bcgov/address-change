@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma.service'
 import {
   type FlatFileColumn,
   type FlatFileSourceRow,
+  assertFlatFileRecordEncoding,
   encodeFlatFileContent,
   fileStamp,
   flatFileName,
@@ -13,6 +14,7 @@ import {
   formatFlatFileHeader,
   formatFlatFileRecord,
   FlatFileFieldTooLongError,
+  FlatFileRecordEncodingError,
 } from './flat-file.format'
 import { summarizeRequestStatus } from './request-status'
 import { S3Transport } from './s3.transport'
@@ -237,9 +239,16 @@ export class FlatFileService {
         const rejected: { requestId: string; reason: string }[] = []
         for (const record of records) {
           try {
-            lines.push(formatFlatFileRecord(record, snapshot.columns))
+            const line = formatFlatFileRecord(record, snapshot.columns)
+            assertFlatFileRecordEncoding(record, line, snapshot.encoding)
+            lines.push(line)
           } catch (err) {
-            if (!(err instanceof FlatFileFieldTooLongError)) throw err
+            if (
+              !(err instanceof FlatFileFieldTooLongError) &&
+              !(err instanceof FlatFileRecordEncodingError)
+            ) {
+              throw err
+            }
             rejected.push({ requestId: record.request_id, reason: err.message })
             this.logger.warn(
               `Omitting request ${record.request_id} from ${partner.partnerCode} batch ${batchId}: ${err.message}`,

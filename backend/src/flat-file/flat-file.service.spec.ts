@@ -62,6 +62,7 @@ function setup(
   rows: Record<string, unknown>[] = [sourceRow],
   nextSequence = 1,
   configuredColumns = columns,
+  partnerConfig = partner,
 ) {
   const tx = {
     $executeRaw: vi.fn().mockResolvedValue(1),
@@ -85,7 +86,7 @@ function setup(
   }
   const prisma = {
     $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
-    partnerSystem: { findMany: vi.fn().mockResolvedValue([partner]) },
+    partnerSystem: { findMany: vi.fn().mockResolvedValue([partnerConfig]) },
     partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(configuredColumns) },
     flatFileBatch: { findMany: vi.fn().mockResolvedValue([]), update: vi.fn() },
     processingOperation: { updateMany: vi.fn() },
@@ -275,6 +276,50 @@ describe('FlatFileService.generateForPartner', () => {
       where: {
         batchId: 'b-1',
         requestId: { in: ['r-long'] },
+        status: 'PENDING',
+      },
+      data: { status: 'FAILED', updatedAt: expect.any(Date), updatedBy: FLAT_FILE_ACTOR },
+    })
+  })
+
+  it('omits a non-ASCII row in US-ASCII mode without failing the rest of the batch', async () => {
+    const asciiPartner = { ...partner, flatFileEncoding: 'US-ASCII' }
+    const fixedColumns = [
+      {
+        position: 1,
+        fieldKey: 'last_name',
+        columnName: 'Last Name',
+        enabled: true,
+        minWidth: 10,
+        fixedWidth: 10,
+        format: null,
+      },
+    ]
+    const rows = [
+      { request_id: 'r-french', last_name: 'Émile' },
+      { request_id: 'r-ascii', last_name: 'Lee' },
+    ]
+    const { service, prisma } = setup(
+      ['r-french', 'r-ascii'],
+      [{ id: 'o-french' }, { id: 'o-ascii' }],
+      rows,
+      1,
+      fixedColumns,
+      asciiPartner,
+    )
+
+    await expect(service.generateForPartner(asciiPartner, now)).resolves.toMatchObject({
+      status: 'READY',
+      recordCount: 1,
+    })
+    const stored = prisma.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
+    expect(Buffer.from(stored.fileContent).toString('ascii')).toBe(`Lee${' '.repeat(7)}\r\n`)
+    expect(prisma.processingOperation.updateMany).toHaveBeenCalledWith({
+      where: {
+        batchId: 'b-1',
+        requestId: { in: ['r-french'] },
         status: 'PENDING',
       },
       data: { status: 'FAILED', updatedAt: expect.any(Date), updatedBy: FLAT_FILE_ACTOR },

@@ -73,6 +73,23 @@ export class FlatFileFieldTooLongError extends Error {
   }
 }
 
+export class FlatFileRecordEncodingError extends Error {
+  constructor(requestId: string) {
+    super(`Request ${requestId} contains characters that cannot be represented in US-ASCII`)
+    this.name = 'FlatFileRecordEncodingError'
+  }
+}
+
+export function assertFlatFileRecordEncoding(
+  record: FlatFileSourceRow,
+  line: string,
+  encoding: string,
+): void {
+  if (encoding === 'US-ASCII' && [...line].some((character) => character.codePointAt(0)! > 0x7f)) {
+    throw new FlatFileRecordEncodingError(record.request_id)
+  }
+}
+
 function renderFixedRow(values: readonly string[], columns: readonly FlatFileColumn[]): string {
   return (
     values
