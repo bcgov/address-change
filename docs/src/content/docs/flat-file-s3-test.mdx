@@ -44,7 +44,9 @@ The command uses the same S3 transport and configuration as flat-file archival, 
 The generic loader reads the JSON files listed in `VAULT_ENV_FILES` and checks
 the names in `VAULT_REQUIRED_KEYS`. Every entry must be a string environment
 value. Duplicate names across files and collisions with existing container
-environment variables fail startup. Move a variable's definition to Vault when
+environment variables fail startup unless the deployment explicitly lists the
+variable in `VAULT_OVERRIDE_KEYS`. TEST/PROD allow replacement of the two legacy
+database environment values, and require both values to come from Vault. Move a variable's definition to Vault when
 adding it to an injected file. Parser errors report the source file without
 echoing its contents.
 

@@ -18,6 +18,15 @@ if (!Array.isArray(requiredKeys) || requiredKeys.some((key) => typeof key !== 's
   throw new Error('VAULT_REQUIRED_KEYS must be a JSON array of environment variable names')
 }
 
+const overrideKeys = parseJson(process.env.VAULT_OVERRIDE_KEYS || '[]', 'VAULT_OVERRIDE_KEYS')
+if (!Array.isArray(overrideKeys) || overrideKeys.some((key) => typeof key !== 'string')) {
+  throw new Error('VAULT_OVERRIDE_KEYS must be a JSON array of environment variable names')
+}
+// TEST/PROD require database credentials from Vault. DEV/PR databases use their
+// generated OpenShift credentials, so their injected database JSON is empty.
+if (process.env.VAULT_DATABASE_ENABLED === 'true') {
+  requiredKeys.push('POSTGRES_USER', 'POSTGRES_PASSWORD')
+}
 const values = new Map()
 for (const file of files) {
   let contents
@@ -37,7 +46,7 @@ for (const file of files) {
     if (values.has(key)) {
       throw new Error(`Duplicate Vault environment variable: ${key}`)
     }
-    if (Object.hasOwn(process.env, key)) {
+    if (Object.hasOwn(process.env, key) && !overrideKeys.includes(key)) {
       throw new Error(`Vault environment variable is already configured: ${key}`)
     }
     values.set(key, value)
