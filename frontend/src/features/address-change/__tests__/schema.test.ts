@@ -93,6 +93,26 @@ describe('withValidFieldsOnly', () => {
     expect(saved.residentialAddress.locality).toBe('Victoria')
     expect(saved.residentialAddress.postalCode).toBe('')
   })
+
+  test('returns a fully valid form unchanged', () => {
+    const values = filled()
+    expect(withValidFieldsOnly(values, stepFields(true)[2])).toEqual(values)
+  })
+
+  test('ignores invalid fields outside the current step and does not mutate the input', () => {
+    const values = { ...filled(), icbc: { ...filled().icbc, heightCm: '' } }
+    const saved = withValidFieldsOnly(values, stepFields(true)[2])
+    expect(saved.icbc.driversLicenseNumber).toBe('1234567')
+    expect(values.icbc.heightCm).toBe('')
+  })
+
+  test('resets a whole top-level field when the issue is on the field itself', () => {
+    const saved = withValidFieldsOnly(
+      { ...filled(), collectionNoticeAcknowledged: false },
+      stepFields(true)[0],
+    )
+    expect(saved.collectionNoticeAcknowledged).toBe(false)
+  })
 })
 
 describe('toAddressChangeRequest', () => {
