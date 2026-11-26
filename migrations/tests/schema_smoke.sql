@@ -31,6 +31,16 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'Partner flat-file layouts were not seeded';
   END IF;
+  IF (SELECT count(*) FROM address_change.partner_flat_file_column
+      WHERE partner_id = icbc AND enabled AND fixed_width IS NOT NULL) <> 63
+     OR (SELECT COALESCE(sum(fixed_width), 0) FROM address_change.partner_flat_file_column
+         WHERE partner_id = icbc AND enabled) <> 897
+     OR (SELECT count(*) FROM address_change.partner_flat_file_column
+         WHERE partner_id = health AND enabled AND fixed_width IS NOT NULL) <> 60
+     OR (SELECT COALESCE(sum(fixed_width), 0) FROM address_change.partner_flat_file_column
+         WHERE partner_id = health AND enabled) <> 870 THEN
+    RAISE EXCEPTION 'ICBC/MSP fixed-width layouts do not match partner field counts or record widths';
+  END IF;
   INSERT INTO address_change.address_change_request
     (request_id, owner_sub, idempotency_key, raw_payload_encrypted, effective_date, created_by, updated_by)
     VALUES (r, test_owner, 'submission-1', decode('0102', 'hex'), current_date, 'test', 'test');

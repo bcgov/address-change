@@ -6,10 +6,15 @@ import { PrismaService } from '../prisma.service'
 import {
   type FlatFileColumn,
   type FlatFileSourceRow,
+  assertFlatFileRecordEncoding,
   encodeFlatFileContent,
   fileStamp,
   flatFileName,
   formatFlatFile,
+  formatFlatFileHeader,
+  formatFlatFileRecord,
+  FlatFileFieldTooLongError,
+  FlatFileRecordEncodingError,
 } from './flat-file.format'
 import { summarizeRequestStatus } from './request-status'
 import { S3Transport } from './s3.transport'
@@ -125,6 +130,7 @@ export class FlatFileService {
       columnName: column.columnName,
       enabled: column.enabled,
       minWidth: column.minWidth,
+      fixedWidth: column.fixedWidth,
       format: column.format,
     }))
     const snapshot = {
@@ -220,32 +226,105 @@ export class FlatFileService {
   ): Promise<BatchResult> {
     try {
       const records = await this.loadRecords(batchId, snapshot.columns)
-      const content = encodeFlatFileContent(
-        formatFlatFile(records, snapshot.columns, snapshot.includeHeader),
-        snapshot.encoding,
-      )
+      const enabledColumns = snapshot.columns.filter((column) => column.enabled)
+      const fixedWidthLayout =
+        enabledColumns.length > 0 &&
+        enabledColumns.every(
+          (column) => column.fixedWidth !== null && column.fixedWidth !== undefined,
+        )
+      let output: string
+      let recordCount = records.length
+      const rejectedRecords: { requestId: string; reason: string }[] = []
+      if (fixedWidthLayout) {
+        const lines: string[] = []
+        for (const record of records) {
+          try {
+            const line = formatFlatFileRecord(record, snapshot.columns)
+            assertFlatFileRecordEncoding(record, line, snapshot.encoding)
+            lines.push(line)
+          } catch (err) {
+            if (
+              !(err instanceof FlatFileFieldTooLongError) &&
+              !(err instanceof FlatFileRecordEncodingError)
+            ) {
+              throw err
+            }
+            rejectedRecords.push({ requestId: record.request_id, reason: err.message })
+            this.logger.warn(
+              `Omitting request ${record.request_id} from ${partner.partnerCode} batch ${batchId}: ${err.message}`,
+            )
+          }
+        }
+        if (records.length > 0 && lines.length === 0) {
+          const generatedAt = new Date()
+          await this.prisma.$transaction(async (tx) => {
+            await tx.flatFileBatch.update({
+              where: { batchId },
+              data: {
+                status: 'FAILED',
+                generationClaimedAt: null,
+                generationLastError: 'No records fit the configured fixed-width fields.',
+                updatedAt: generatedAt,
+                updatedBy: FLAT_FILE_ACTOR,
+              },
+            })
+            await tx.processingOperation.updateMany({
+              where: {
+                batchId,
+                requestId: { in: rejectedRecords.map(({ requestId }) => requestId) },
+                status: 'PENDING',
+              },
+              data: { status: 'FAILED', updatedAt: generatedAt, updatedBy: FLAT_FILE_ACTOR },
+            })
+          })
+          return {
+            partnerCode: partner.partnerCode,
+            batchId,
+            status: 'FAILED',
+            recordCount: 0,
+            fileName,
+          }
+        }
+        output = `${snapshot.includeHeader ? formatFlatFileHeader(snapshot.columns) : ''}${lines.join('')}`
+        recordCount = lines.length
+      } else {
+        output = formatFlatFile(records, snapshot.columns, snapshot.includeHeader)
+      }
+      const content = encodeFlatFileContent(output, snapshot.encoding)
       const checksum = createHash('sha256').update(content).digest('hex')
       // The batch's sequence fixes its name; record actual completion time separately.
       const generatedAt = new Date()
-      await this.prisma.flatFileBatch.update({
-        where: { batchId },
-        data: {
-          fileContent: new Uint8Array(content),
-          checksum,
-          recordCount: records.length,
-          generatedAt,
-          status: 'READY',
-          generationClaimedAt: null,
-          generationLastError: null,
-          updatedAt: generatedAt,
-          updatedBy: FLAT_FILE_ACTOR,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.flatFileBatch.update({
+          where: { batchId },
+          data: {
+            fileContent: new Uint8Array(content),
+            checksum,
+            recordCount,
+            generatedAt,
+            status: 'READY',
+            generationClaimedAt: null,
+            generationLastError: null,
+            updatedAt: generatedAt,
+            updatedBy: FLAT_FILE_ACTOR,
+          },
+        })
+        if (rejectedRecords.length > 0) {
+          await tx.processingOperation.updateMany({
+            where: {
+              batchId,
+              requestId: { in: rejectedRecords.map(({ requestId }) => requestId) },
+              status: 'PENDING',
+            },
+            data: { status: 'FAILED', updatedAt: generatedAt, updatedBy: FLAT_FILE_ACTOR },
+          })
+        }
       })
       return {
         partnerCode: partner.partnerCode,
         batchId,
         status: 'READY',
-        recordCount: records.length,
+        recordCount,
         fileName,
       }
     } catch (err) {
@@ -331,7 +410,10 @@ export class FlatFileService {
     columns: readonly FlatFileColumn[],
   ): Promise<FlatFileSourceRow[]> {
     const records = await this.prisma.$queryRaw<FlatFileSourceRow[]>`
-      SELECT source.* FROM address_change.flat_file_source source
+      SELECT source.*,
+        split_part(source.middle_initials, ' ', 1) AS first_middle_initial,
+        NULLIF(split_part(source.middle_initials, ' ', 2), '') AS second_middle_initial
+      FROM address_change.flat_file_source source
       JOIN address_change.processing_operation operation USING (request_id)
       WHERE operation.batch_id = ${batchId}::uuid
       ORDER BY source.submission_timestamp, source.request_id`
@@ -348,6 +430,26 @@ export class FlatFileService {
             encrypted,
             `request:${record.request_id}:${context}`,
           )
+        }
+      }
+      if (hydrated.is_mailing_address_same === true) {
+        const sharedAddressFields = [
+          'address_flag',
+          'unit_number',
+          'street_number',
+          'street_suffix',
+          'street_name',
+          'street_type',
+          'street_direction',
+          'city',
+          'province',
+          'postal_code',
+          'address_line_one',
+          'address_line_two',
+          'country',
+        ]
+        for (const field of sharedAddressFields) {
+          hydrated[`mailing_${field}`] = hydrated[`new_${field}`]
         }
       }
       return hydrated
@@ -539,7 +641,7 @@ export class FlatFileService {
       },
     })
     await tx.processingOperation.updateMany({
-      where: { batchId },
+      where: { batchId, status: 'PENDING' },
       data: { status: 'SUCCEEDED', updatedAt: now, updatedBy: FLAT_FILE_ACTOR },
     })
     const operations = await tx.processingOperation.findMany({

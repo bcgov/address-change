@@ -4,6 +4,7 @@ import {
   fileStamp,
   flatFileName,
   formatFlatFile,
+  FlatFileFieldTooLongError,
   type FlatFileColumn,
   type FlatFileSourceRow,
 } from './flat-file.format'
@@ -39,6 +40,36 @@ const columns: FlatFileColumn[] = [
     columnName: 'Ignored',
     enabled: false,
     minWidth: 0,
+    format: null,
+  },
+]
+
+const fixedColumns: FlatFileColumn[] = [
+  {
+    position: 1,
+    fieldKey: 'submission_timestamp',
+    columnName: 'Tran Date',
+    enabled: true,
+    minWidth: 8,
+    fixedWidth: 8,
+    format: 'YYYYMMDD_VANCOUVER',
+  },
+  {
+    position: 2,
+    fieldKey: 'submission_timestamp',
+    columnName: 'Tran Time',
+    enabled: true,
+    minWidth: 6,
+    fixedWidth: 6,
+    format: 'HHmmss',
+  },
+  {
+    position: 3,
+    fieldKey: 'last_name',
+    columnName: 'Last Name',
+    enabled: true,
+    minWidth: 4,
+    fixedWidth: 4,
     format: null,
   },
 ]
@@ -108,6 +139,18 @@ describe('formatFlatFile', () => {
 
   it('rejects empty configurations', () => {
     expect(() => formatFlatFile([row()], [], false)).toThrow('no enabled columns')
+  })
+
+  it('writes fixed-width fields contiguously with date and time components', () => {
+    const [line] = lines(formatFlatFile([row({ last_name: 'Lee' })], fixedColumns, false))
+    expect(line).toBe('20250516191024Lee ')
+    expect(line).toHaveLength(18)
+  })
+
+  it('throws a typed error when a fixed-width field is too long', () => {
+    expect(() => formatFlatFile([row({ last_name: 'Smith' })], fixedColumns, false)).toThrow(
+      FlatFileFieldTooLongError,
+    )
   })
 })
 

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { PartnerSystem } from '../../generated/prisma/client.js'
 import type { RequestEncryptionService } from '../address-change/request-encryption.service'
-import { FlatFileService } from './flat-file.service'
+import { FLAT_FILE_ACTOR, FlatFileService } from './flat-file.service'
 import type { S3Transport } from './s3.transport'
 import type { SftpTransport } from './sftp.transport'
 import type { PrismaService } from '../prisma.service'
@@ -61,6 +61,8 @@ function setup(
   operations: { id: string }[],
   rows: Record<string, unknown>[] = [sourceRow],
   nextSequence = 1,
+  configuredColumns = columns,
+  partnerConfig = partner,
 ) {
   const tx = {
     $executeRaw: vi.fn().mockResolvedValue(1),
@@ -84,9 +86,10 @@ function setup(
   }
   const prisma = {
     $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
-    partnerSystem: { findMany: vi.fn().mockResolvedValue([partner]) },
-    partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(columns) },
+    partnerSystem: { findMany: vi.fn().mockResolvedValue([partnerConfig]) },
+    partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(configuredColumns) },
     flatFileBatch: { findMany: vi.fn().mockResolvedValue([]), update: vi.fn() },
+    processingOperation: { updateMany: vi.fn() },
     $queryRaw: vi.fn().mockResolvedValue(rows),
   }
   const sftp = { upload: vi.fn() }
@@ -156,6 +159,14 @@ describe('FlatFileService.generateForPartner', () => {
       },
       processingOperation: { updateMany: vi.fn() },
     }
+    const saveTx = {
+      flatFileBatch: { update: vi.fn() },
+      processingOperation: { updateMany: vi.fn() },
+    }
+    const nextSaveTx = {
+      flatFileBatch: { update: vi.fn() },
+      processingOperation: { updateMany: vi.fn() },
+    }
     const create = nextTx.flatFileBatch.create
     const createSpy = vi.fn((args: Parameters<typeof create>[0]) => create(args))
     nextTx.flatFileBatch.create = createSpy
@@ -163,7 +174,11 @@ describe('FlatFileService.generateForPartner', () => {
       $transaction: vi
         .fn()
         .mockImplementationOnce((callback: (tx: typeof resumeTx) => unknown) => callback(resumeTx))
-        .mockImplementationOnce((callback: (tx: typeof nextTx) => unknown) => callback(nextTx)),
+        .mockImplementationOnce((callback: (tx: typeof saveTx) => unknown) => callback(saveTx))
+        .mockImplementationOnce((callback: (tx: typeof nextTx) => unknown) => callback(nextTx))
+        .mockImplementationOnce((callback: (tx: typeof nextSaveTx) => unknown) =>
+          callback(nextSaveTx),
+        ),
       partnerFlatFileColumn: { findMany: vi.fn().mockResolvedValue(columns) },
       flatFileBatch: {
         findMany: vi.fn().mockResolvedValue([{ batchId: 'b-1' }]),
@@ -187,7 +202,7 @@ describe('FlatFileService.generateForPartner', () => {
       fileName: 'acbc_requests_icbc_2025_05_16_02.txt',
     })
 
-    const resumeSave = prisma.flatFileBatch.update.mock.calls.find(
+    const resumeSave = saveTx.flatFileBatch.update.mock.calls.find(
       ([args]) => args.data.fileContent !== undefined,
     )
     expect(resumeSave?.[0]).toEqual(
@@ -237,6 +252,227 @@ describe('FlatFileService.generateForPartner', () => {
     )
   })
 
+  it('omits oversized fixed-width records and marks only those operations FAILED', async () => {
+    const fixedColumns = [
+      {
+        position: 1,
+        fieldKey: 'last_name',
+        columnName: 'Last Name',
+        enabled: true,
+        minWidth: 3,
+        fixedWidth: 3,
+        format: null,
+      },
+    ]
+    const rows = [
+      { request_id: 'r-good', last_name: 'Lee' },
+      { request_id: 'r-long', last_name: 'Smith' },
+    ]
+    const { service, tx } = setup(
+      ['r-good', 'r-long'],
+      [{ id: 'o-good' }, { id: 'o-long' }],
+      rows,
+      1,
+      fixedColumns,
+    )
+
+    await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
+      status: 'READY',
+      recordCount: 1,
+    })
+    const stored = tx.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
+    expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`Lee${'\r\n'}`)
+    expect(tx.processingOperation.updateMany).toHaveBeenCalledWith({
+      where: {
+        batchId: 'b-1',
+        requestId: { in: ['r-long'] },
+        status: 'PENDING',
+      },
+      data: { status: 'FAILED', updatedAt: expect.any(Date), updatedBy: FLAT_FILE_ACTOR },
+    })
+    const failedOperationUpdateIndex = tx.processingOperation.updateMany.mock.calls.findIndex(
+      ([args]) => args.data.status === 'FAILED',
+    )
+    expect(tx.flatFileBatch.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.processingOperation.updateMany.mock.invocationCallOrder[failedOperationUpdateIndex]!,
+    )
+  })
+
+  it('does not fail rejected operations when saving the file fails', async () => {
+    const fixedColumns = [
+      {
+        position: 1,
+        fieldKey: 'last_name',
+        columnName: 'Last Name',
+        enabled: true,
+        minWidth: 3,
+        fixedWidth: 3,
+        format: null,
+      },
+    ]
+    const { service, prisma, tx } = setup(
+      ['r-long', 'r-good'],
+      [{ id: 'o-long' }, { id: 'o-good' }],
+      [
+        { request_id: 'r-long', last_name: 'Smith' },
+        { request_id: 'r-good', last_name: 'Lee' },
+      ],
+      1,
+      fixedColumns,
+    )
+    tx.flatFileBatch.update.mockRejectedValueOnce(new Error('database write failed'))
+
+    await expect(service.generateForPartner(partner, now)).rejects.toThrow('database write failed')
+
+    expect(
+      tx.processingOperation.updateMany.mock.calls.some(([args]) => args.data.status === 'FAILED'),
+    ).toBe(false)
+    expect(prisma.flatFileBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { batchId: 'b-1' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      }),
+    )
+  })
+
+  it('omits a non-ASCII row in US-ASCII mode without failing the rest of the batch', async () => {
+    const asciiPartner = { ...partner, flatFileEncoding: 'US-ASCII' }
+    const fixedColumns = [
+      {
+        position: 1,
+        fieldKey: 'last_name',
+        columnName: 'Last Name',
+        enabled: true,
+        minWidth: 10,
+        fixedWidth: 10,
+        format: null,
+      },
+    ]
+    const rows = [
+      { request_id: 'r-french', last_name: 'Émile' },
+      { request_id: 'r-ascii', last_name: 'Lee' },
+    ]
+    const { service, tx } = setup(
+      ['r-french', 'r-ascii'],
+      [{ id: 'o-french' }, { id: 'o-ascii' }],
+      rows,
+      1,
+      fixedColumns,
+      asciiPartner,
+    )
+
+    await expect(service.generateForPartner(asciiPartner, now)).resolves.toMatchObject({
+      status: 'READY',
+      recordCount: 1,
+    })
+    const stored = tx.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
+    expect(Buffer.from(stored.fileContent).toString('ascii')).toBe(`Lee${' '.repeat(7)}\r\n`)
+    expect(tx.processingOperation.updateMany).toHaveBeenCalledWith({
+      where: {
+        batchId: 'b-1',
+        requestId: { in: ['r-french'] },
+        status: 'PENDING',
+      },
+      data: { status: 'FAILED', updatedAt: expect.any(Date), updatedBy: FLAT_FILE_ACTOR },
+    })
+  })
+
+  it('uses the residential address in mailing slots when the addresses are shared', async () => {
+    const sharedColumns = [
+      {
+        position: 1,
+        fieldKey: 'new_city',
+        columnName: 'New City',
+        enabled: true,
+        minWidth: 8,
+        fixedWidth: 8,
+        format: null,
+      },
+      {
+        position: 2,
+        fieldKey: 'mailing_city',
+        columnName: 'Mailing City',
+        enabled: true,
+        minWidth: 8,
+        fixedWidth: 8,
+        format: null,
+      },
+    ]
+    const { service, tx } = setup(
+      ['r-shared'],
+      [{ id: 'o-shared' }],
+      [
+        {
+          request_id: 'r-shared',
+          is_mailing_address_same: true,
+          new_city: 'Kamloops',
+          mailing_city: null,
+        },
+      ],
+      1,
+      sharedColumns,
+    )
+
+    await service.generateForPartner(partner, now)
+
+    const stored = tx.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
+    expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`KamloopsKamloops${'\r\n'}`)
+  })
+
+  it('exposes separate middle initials for partner layout columns', async () => {
+    const initialColumns = [
+      {
+        position: 1,
+        fieldKey: 'first_middle_initial',
+        columnName: '1st Initial',
+        enabled: true,
+        minWidth: 1,
+        fixedWidth: 1,
+        format: null,
+      },
+      {
+        position: 2,
+        fieldKey: 'second_middle_initial',
+        columnName: '2nd Initial',
+        enabled: true,
+        minWidth: 1,
+        fixedWidth: 1,
+        format: null,
+      },
+    ]
+    const { service, prisma, tx } = setup(
+      ['r-initials'],
+      [{ id: 'o-initials' }],
+      [
+        {
+          request_id: 'r-initials',
+          first_middle_initial: 'C',
+          second_middle_initial: 'J',
+        },
+      ],
+      1,
+      initialColumns,
+    )
+
+    await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
+      status: 'READY',
+      recordCount: 1,
+    })
+    const stored = tx.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
+    expect(Buffer.from(stored.fileContent).toString('utf8')).toBe(`CJ${'\r\n'}`)
+    const sourceQuery = prisma.$queryRaw.mock.calls[0]?.[0].join('')
+    expect(sourceQuery).toContain('split_part(source.middle_initials,')
+    expect(sourceQuery).not.toContain('JOIN address_change.request_person')
+  })
+
   it('skips partners with no pending operations', async () => {
     const { service, tx } = setup([], [])
     await expect(service.generateForPartner(partner, now)).resolves.toMatchObject({
@@ -283,8 +519,8 @@ describe('FlatFileService.generateForPartner', () => {
       const results = await service.generateAll(now)
 
       expect(results.map((result) => result.status)).toEqual(['READY', 'READY'])
-      expect(prisma.flatFileBatch.update).toHaveBeenCalledTimes(2)
-      for (const [index, call] of prisma.flatFileBatch.update.mock.calls.entries()) {
+      expect(tx.flatFileBatch.update).toHaveBeenCalledTimes(2)
+      for (const [index, call] of tx.flatFileBatch.update.mock.calls.entries()) {
         const { generatedAt, updatedAt } = call[0].data
         // flat_file_status exposes created_at as generation_started_at.
         expect(generatedAt.getTime()).toBeGreaterThanOrEqual(generationStartedAt[index]!.getTime())
@@ -298,7 +534,7 @@ describe('FlatFileService.generateForPartner', () => {
   })
 
   it('stores the layout snapshot, exact bytes, checksum, and first/last request times', async () => {
-    const { service, prisma, tx, encryption } = setup(['r-1'], [{ id: 'o-1' }])
+    const { service, tx, encryption } = setup(['r-1'], [{ id: 'o-1' }])
 
     const result = await service.generateForPartner(partner, now)
 
@@ -327,7 +563,9 @@ describe('FlatFileService.generateForPartner', () => {
     expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { operationId: { in: ['o-1'] } } }),
     )
-    const stored = prisma.flatFileBatch.update.mock.calls[0]?.[0].data
+    const stored = tx.flatFileBatch.update.mock.calls.find(
+      ([args]) => args.data.fileContent !== undefined,
+    )?.[0].data
     expect(stored.recordCount).toBe(1)
     expect(stored.checksum).toBe(createHash('sha256').update(stored.fileContent).digest('hex'))
     expect(Buffer.from(stored.fileContent).toString('utf8')).toContain(
@@ -438,7 +676,10 @@ describe('FlatFileService transfer', () => {
       }),
     )
     expect(tx.processingOperation.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: 'SUCCEEDED' }) }),
+      expect.objectContaining({
+        where: { batchId: 'b-1', status: 'PENDING' },
+        data: expect.objectContaining({ status: 'SUCCEEDED' }),
+      }),
     )
     expect(tx.addressChangeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'COMPLETED' }) }),

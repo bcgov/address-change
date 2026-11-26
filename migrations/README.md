@@ -25,6 +25,12 @@ channel (`ssh-keyscan -p 22 <host> | ssh-keygen -lf -` shows what the server
 presents). For local runs only, set `SFTP_ALLOW_UNVERIFIED_HOST_KEY=true` to skip
 the check; never set it in OpenShift.
 
+`sql/V12__fixed_width_icbc_msp_layouts.sql` configures the ICBC and HEALTH/MSP
+layouts as contiguous fixed-width records (897 and 870 characters respectively).
+Each field allocation is stored in `partner_flat_file_column.fixed_width`; the
+generator omits and marks FAILED only records whose values exceed a field slot.
+The original layouts remain in batch snapshots for reproducible recovery.
+
 `seed/R__local_sample_data.sql` is local-only sample data. docker-compose adds
 the `seed/` location; the migrations image copies `sql/` alone, so the seed never
 reaches PR, TEST or PROD databases.

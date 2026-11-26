@@ -195,6 +195,7 @@ model PartnerFlatFileColumn {
   columnName String   @map("column_name")
   enabled    Boolean  @default(true)
   minWidth   Int      @default(0) @map("min_width")
+  fixedWidth Int?     @map("fixed_width")
   format     String?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy  String   @default(dbgenerated("CURRENT_USER")) @map("created_by")
