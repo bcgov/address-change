@@ -81,7 +81,7 @@ describe('AddressChangeForm step flow', () => {
       expect.objectContaining({ step: 1 }),
     )
 
-    await click('Previous')
+    await click('Back')
     expect(await screen.findByRole('region', { name: 'Collection notice' })).toBeInTheDocument()
   })
 
@@ -150,7 +150,7 @@ describe('AddressChangeForm step flow', () => {
     await click('Continue')
 
     expect(await screen.findByText('1 Main St, Victoria, BC, V8V 1A1, Canada')).toBeInTheDocument()
-    await click('Submit request')
+    await click('Continue')
 
     expect(await screen.findByText('req-1')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Return to home' })).toBeInTheDocument()
@@ -179,6 +179,73 @@ describe('AddressChangeForm step flow', () => {
     expect(await screen.findByLabelText(/Security keyword/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: 'No' }))
     await waitFor(() => expect(screen.queryByLabelText(/Security keyword/)).not.toBeInTheDocument())
+  })
+
+  test('Save draft is only offered on steps 2 and 3', async () => {
+    renderForm()
+    expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText(/acknowledge the collection notice/))
+    await click('Continue')
+    expect(await screen.findByText('Jane Doe')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument()
+  })
+
+  test('Save draft saves only valid fields on the current step, stays put and the notice closes', async () => {
+    const onDraftCreated = vi.fn()
+    renderForm({
+      onDraftCreated,
+      initialDraft: {
+        idempotencyKey: 'k',
+        step: 2,
+        values: {
+          collectionNoticeAcknowledged: true,
+          residentialAddress: {
+            addressLineOne: '1 Main St',
+            locality: 'Victoria',
+            postalCode: 'bad',
+          },
+        },
+      },
+    })
+    const saveButton = screen.getByRole('button', { name: 'Save draft' })
+    expect(saveButton).toBeDisabled()
+    await userEvent.type(screen.getByLabelText(/Address line 1/), ' B')
+    await waitFor(() => expect(saveButton).toBeEnabled())
+    await userEvent.click(saveButton)
+
+    expect(await screen.findByText('Draft saved.')).toBeInTheDocument()
+    expect(saveButton).toBeDisabled()
+    expect(screen.getByText('New residential address')).toBeInTheDocument()
+    expect(onDraftCreated).not.toHaveBeenCalled()
+    const [, payload] = vi.mocked(saveAddressChangeDraft).mock.calls[0]
+    expect(payload.step).toBe(2)
+    expect(payload.values.residentialAddress).toMatchObject({
+      addressLineOne: '1 Main St B',
+      locality: 'Victoria',
+      postalCode: '',
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: /close/i }))
+    await waitFor(() => expect(screen.queryByText('Draft saved.')).not.toBeInTheDocument())
+  })
+
+  test('Save draft on a new request reports the created draft once', async () => {
+    const onDraftCreated = vi.fn()
+    renderForm({ onDraftCreated })
+    await userEvent.click(screen.getByLabelText(/acknowledge the collection notice/))
+    await click('Continue')
+    await screen.findByText('Jane Doe')
+    expect(onDraftCreated).toHaveBeenCalledTimes(1)
+    expect(onDraftCreated).toHaveBeenCalledWith('draft-1')
+  })
+
+  test('Save draft shows an error when saving fails', async () => {
+    vi.mocked(saveAddressChangeDraft).mockRejectedValue(new Error('down'))
+    renderForm({ initialDraft: { idempotencyKey: 'k', step: 2, values: {} } })
+    await userEvent.type(screen.getByLabelText(/Address line 1/), '1 Main St')
+    await click('Save draft')
+    expect(await screen.findByText(/could not save/i)).toBeInTheDocument()
+    expect(screen.queryByText('Draft saved.')).not.toBeInTheDocument()
   })
 
   test('shows an error and stays on the step if saving progress fails', async () => {

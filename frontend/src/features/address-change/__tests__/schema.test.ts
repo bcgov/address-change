@@ -1,4 +1,10 @@
-import { addressChangeFormSchema, defaultFormValues, toAddressChangeRequest } from '../schema'
+import {
+  addressChangeFormSchema,
+  defaultFormValues,
+  stepFields,
+  toAddressChangeRequest,
+  withValidFieldsOnly,
+} from '../schema'
 
 const filled = () => ({
   ...defaultFormValues(),
@@ -73,6 +79,66 @@ describe('addressChangeFormSchema', () => {
       icbc: empty,
     })
     expect(withoutIcbc.success).toBe(true)
+  })
+})
+
+describe('withValidFieldsOnly', () => {
+  test('keeps valid leaves of a partly filled address and resets only the invalid ones', () => {
+    const values = {
+      ...filled(),
+      residentialAddress: { ...filled().residentialAddress, postalCode: 'bad' },
+    }
+    const saved = withValidFieldsOnly(values, stepFields(true)[2])
+    expect(saved.residentialAddress.addressLineOne).toBe('1 Main St')
+    expect(saved.residentialAddress.locality).toBe('Victoria')
+    expect(saved.residentialAddress.postalCode).toBe('')
+  })
+
+  test('returns a fully valid form unchanged', () => {
+    const values = filled()
+    expect(withValidFieldsOnly(values, stepFields(true)[2])).toEqual(values)
+  })
+
+  test('ignores invalid fields outside the current step and does not mutate the input', () => {
+    const values = { ...filled(), icbc: { ...filled().icbc, heightCm: '' } }
+    const saved = withValidFieldsOnly(values, stepFields(true)[2])
+    expect(saved.icbc.driversLicenseNumber).toBe('1234567')
+    expect(values.icbc.heightCm).toBe('')
+  })
+
+  test('resets a whole top-level field when the issue is on the field itself', () => {
+    const saved = withValidFieldsOnly(
+      { ...filled(), collectionNoticeAcknowledged: false },
+      stepFields(true)[0],
+    )
+    expect(saved.collectionNoticeAcknowledged).toBe(false)
+  })
+
+  test('does not throw when a restored draft has non-string ICBC fields', () => {
+    const values = {
+      ...filled(),
+      icbc: {
+        driversLicenseNumber: 12345678,
+        heightCm: null,
+        weightKg: '70',
+        securityKeyword: 'k',
+      },
+    } as unknown as ReturnType<typeof filled>
+    const saved = withValidFieldsOnly(values, stepFields(true)[3])
+    expect(saved.icbc.weightKg).toBe('70')
+    expect(saved.icbc.driversLicenseNumber).toBe('')
+  })
+
+  test('still drops an invalid licence number when an unrelated base field is invalid', () => {
+    const base = filled()
+    const values = {
+      ...base,
+      residentialAddress: { ...base.residentialAddress, region: 'AB' },
+      icbc: { ...base.icbc, driversLicenseNumber: 'bad' },
+    }
+    const saved = withValidFieldsOnly(values, stepFields(true)[3])
+    expect(saved.icbc.driversLicenseNumber).toBe('')
+    expect(saved.icbc.heightCm).toBe('175')
   })
 })
 

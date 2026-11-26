@@ -35,7 +35,7 @@ body {
 
 .page-heading h2 {
   margin: 0;
-  color: var(--theme-primary-blue);
+  color: var(--typography-color-secondary);
   font-size: var(--typography-font-size-h2);
 }
 
@@ -88,7 +88,7 @@ body {
 .app-card > legend {
   margin: 0 0 var(--layout-margin-medium);
   padding: 0;
-  color: var(--theme-primary-blue);
+  color: var(--typography-color-secondary);
   font-size: var(--typography-font-size-h4);
   font-weight: var(--typography-font-weights-bold);
 }
@@ -180,12 +180,39 @@ fieldset.app-card {
   gap: var(--layout-margin-small);
 }
 
+.step-card {
+  background: #fff;
+  border: 1px solid #e1e1e1;
+  border-radius: 0;
+}
+
+.step-card .app-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.step-card-body {
+  padding: var(--layout-padding-xlarge);
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--layout-margin-medium);
-  margin-top: var(--layout-margin-large);
+  padding: var(--layout-padding-medium) var(--layout-padding-xlarge);
+  border-top: 1px solid #e1e1e1;
+}
+
+.form-actions .bcds-react-aria-Button.primary {
+  width: 212px;
+}
+
+.step-card .form-alert {
+  margin-bottom: 0;
 }
 
 .form-actions > :first-child:not(:last-child) {
@@ -204,7 +231,7 @@ fieldset.app-card {
 
 .centered-card h2 {
   margin-top: 0;
-  color: var(--theme-primary-blue);
+  color: var(--typography-color-secondary);
 }
 
 .centered-card a {
@@ -599,8 +626,9 @@ fieldset.app-card {
 
 .step-heading {
   margin: 0 0 var(--layout-margin-medium);
-  color: var(--theme-primary-blue);
-  font-size: var(--typography-font-size-h3);
+  color: var(--typography-color-secondary);
+  font-size: 36px;
+  font-weight: 700;
 }
 
 .step-heading:focus {
@@ -744,7 +772,7 @@ fieldset.app-card {
 
 .request-card-header h3 {
   margin: 0;
-  color: var(--theme-primary-blue);
+  color: var(--typography-color-secondary);
 }
 
 .request-card-details {
@@ -856,7 +884,7 @@ fieldset.app-card {
 }
 
 .service-unavailable h1 {
-  color: var(--theme-primary-blue);
+  color: var(--typography-color-secondary);
 }
 
 .service-unavailable-progress {

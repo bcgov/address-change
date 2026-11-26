@@ -13,6 +13,7 @@ import {
   mergeDraftValues,
   stepFields,
   toAddressChangeRequest,
+  withValidFieldsOnly,
   type AddressChangeFormValues,
 } from './schema'
 import StepIndicator from './StepIndicator'
@@ -64,7 +65,9 @@ const AddressChangeForm: FC<Props> = ({
   const [phase, setPhase] = useState<'editing' | 'submitting' | 'done'>('editing')
   const [requestId, setRequestId] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const { control, handleSubmit, watch, setValue, getValues, trigger, formState } =
     useForm<AddressChangeFormValues>({
@@ -86,6 +89,11 @@ const AddressChangeForm: FC<Props> = ({
     headingRef.current?.focus({ preventScroll: true })
   }, [step, phase])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: capture the loaded draft once on mount
+  useEffect(() => {
+    if (initialDraft) setSavedSnapshot(JSON.stringify(getValues()))
+  }, [])
+
   if (!user) return null
   const fields = stepFields(Boolean(user.birthdate))
 
@@ -102,9 +110,12 @@ const AddressChangeForm: FC<Props> = ({
 
   const goTo = async (target: number, { blockOnFailure }: { blockOnFailure: boolean }) => {
     setError(null)
+    setNotice(null)
     setIsSaving(true)
+    const snapshot = JSON.stringify(getValues())
     try {
       const savedId = await draft.save(target, getValues())
+      setSavedSnapshot(snapshot)
       if (!draftAnnouncedRef.current) {
         draftAnnouncedRef.current = true
         onDraftCreated?.(savedId)
@@ -124,6 +135,27 @@ const AddressChangeForm: FC<Props> = ({
   const next = async () => {
     const valid = fields[step].length === 0 || (await trigger([...fields[step]]))
     if (valid) await goTo(step + 1, { blockOnFailure: true })
+  }
+
+  const saveDraft = async () => {
+    setError(null)
+    setNotice(null)
+    setIsSaving(true)
+    const values = getValues()
+    const snapshot = JSON.stringify(values)
+    try {
+      const savedId = await draft.save(step, withValidFieldsOnly(values, fields[step]))
+      setSavedSnapshot(snapshot)
+      if (!draftAnnouncedRef.current) {
+        draftAnnouncedRef.current = true
+        onDraftCreated?.(savedId)
+      }
+      setNotice('Draft saved.')
+    } catch {
+      setError('We could not save your draft. Please try again.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const firstInvalidStep = (errors: Record<string, unknown>) =>
@@ -171,62 +203,87 @@ const AddressChangeForm: FC<Props> = ({
         onSelect={(target) => void goTo(target, { blockOnFailure: false })}
         steps={STEP_LABELS}
       />
-      <h3 className="step-heading" ref={headingRef} tabIndex={-1}>
-        {STEP_LABELS[step]}
-      </h3>
+      <div className="step-card">
+        <div className="step-card-body">
+          <h3 className="step-heading" ref={headingRef} tabIndex={-1}>
+            {STEP_LABELS[step]}
+          </h3>
 
-      {step === 0 && <CollectionNoticeStep control={control} />}
-      {step === 1 && <ReviewInformationStep control={control} user={user} />}
-      {step === 2 && (
-        <NewAddressStep
-          control={control}
-          mailingSame={mailingSame}
-          onMailingSelected={fillAddress('mailingAddress')}
-          onResidentialSelected={fillAddress('residentialAddress')}
-        />
-      )}
-      {step === 3 && <PartnersStep control={control} notifyIcbc={notifyIcbc} />}
-      {step === 4 && (
-        <ReviewSubmitStep
-          onEdit={(target) => void goTo(target, { blockOnFailure: false })}
-          user={user}
-          values={getValues()}
-        />
-      )}
+          {step === 0 && <CollectionNoticeStep control={control} />}
+          {step === 1 && <ReviewInformationStep control={control} user={user} />}
+          {step === 2 && (
+            <NewAddressStep
+              control={control}
+              mailingSame={mailingSame}
+              onMailingSelected={fillAddress('mailingAddress')}
+              onResidentialSelected={fillAddress('residentialAddress')}
+            />
+          )}
+          {step === 3 && <PartnersStep control={control} notifyIcbc={notifyIcbc} />}
+          {step === 4 && (
+            <ReviewSubmitStep
+              onEdit={(target) => void goTo(target, { blockOnFailure: false })}
+              user={user}
+              values={getValues()}
+            />
+          )}
 
-      {error && (
-        <div className="form-alert" role="alert">
-          <AlertBanner variant="danger">{error}</AlertBanner>
+          {error && (
+            <div className="form-alert" role="alert">
+              <AlertBanner onClose={() => setError(null)} variant="danger">
+                {error}
+              </AlertBanner>
+            </div>
+          )}
+
+          {notice && (
+            <output className="form-alert">
+              <AlertBanner onClose={() => setNotice(null)} variant="success">
+                {notice}
+              </AlertBanner>
+            </output>
+          )}
         </div>
-      )}
 
-      <div className="form-actions">
-        {step > 0 && (
-          <Button
-            isDisabled={isSaving}
-            onPress={() => void goTo(step - 1, { blockOnFailure: false })}
-            variant="secondary"
-          >
-            Previous
-          </Button>
-        )}
-        {onCancel && step === 0 && (
-          <Button onPress={onCancel} variant="tertiary">
-            Cancel
-          </Button>
-        )}
-        {step < LAST_STEP ? (
-          <Button
-            isDisabled={isSaving || !areFieldsValid(currentValues, fields[step])}
-            onPress={() => void next()}
-          >
-            Continue
-          </Button>
-        ) : (
-          <Button isDisabled={isSaving} type="submit">
-            Submit request
-          </Button>
-        )}
+        <div className="form-actions">
+          {step > 0 && (
+            <Button
+              isDisabled={isSaving}
+              onPress={() => void goTo(step - 1, { blockOnFailure: false })}
+              variant="tertiary"
+            >
+              Back
+            </Button>
+          )}
+          {onCancel && step === 0 && (
+            <Button onPress={onCancel} variant="tertiary">
+              Cancel
+            </Button>
+          )}
+          {step < LAST_STEP ? (
+            <>
+              {step > 1 && (
+                <Button
+                  isDisabled={isSaving || JSON.stringify(currentValues) === savedSnapshot}
+                  onPress={() => void saveDraft()}
+                  variant="secondary"
+                >
+                  Save draft
+                </Button>
+              )}
+              <Button
+                isDisabled={isSaving || !areFieldsValid(currentValues, fields[step])}
+                onPress={() => void next()}
+              >
+                Continue
+              </Button>
+            </>
+          ) : (
+            <Button isDisabled={isSaving} type="submit">
+              Continue
+            </Button>
+          )}
+        </div>
       </div>
     </form>
   )
