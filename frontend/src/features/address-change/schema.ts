@@ -134,20 +134,27 @@ export function areFieldsValid(values: AddressChangeFormValues, names: StepField
   )
 }
 
-/** Returns the values with any invalid field among `names` reset to its default, so only valid input is kept. */
+/** Returns the values with each invalid leaf among `names` reset to its default, so only valid input is kept. */
 export function withValidFieldsOnly(
   values: AddressChangeFormValues,
   names: StepFields,
 ): AddressChangeFormValues {
   const result = addressChangeFormSchema.safeParse(values)
   if (result.success) return values
-  const defaults = defaultFormValues()
-  const invalid = new Set(result.error.issues.map((issue) => issue.path[0]))
-  const cleaned = { ...values }
-  for (const name of names) {
-    if (invalid.has(name)) Object.assign(cleaned, { [name]: defaults[name] })
+  const defaults = defaultFormValues() as Record<string, unknown>
+  const cleaned = structuredClone(values) as Record<string, unknown>
+  for (const issue of result.error.issues) {
+    const [root, ...rest] = issue.path as string[]
+    if (!names.includes(root as keyof AddressChangeFormValues)) continue
+    if (rest.length === 0) {
+      cleaned[root] = defaults[root]
+      continue
+    }
+    const target = cleaned[root] as Record<string, unknown>
+    const fallback = defaults[root] as Record<string, unknown>
+    target[rest[0]] = fallback[rest[0]]
   }
-  return cleaned
+  return cleaned as AddressChangeFormValues
 }
 
 const toApiAddress = (address: Partial<TokenAddress>) => ({

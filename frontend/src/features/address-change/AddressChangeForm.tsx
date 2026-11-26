@@ -219,13 +219,17 @@ const AddressChangeForm: FC<Props> = ({
 
           {error && (
             <div className="form-alert" role="alert">
-              <AlertBanner variant="danger">{error}</AlertBanner>
+              <AlertBanner onClose={() => setError(null)} variant="danger">
+                {error}
+              </AlertBanner>
             </div>
           )}
 
           {notice && (
             <div className="form-alert" role="status">
-              <AlertBanner variant="success">{notice}</AlertBanner>
+              <AlertBanner onClose={() => setNotice(null)} variant="success">
+                {notice}
+              </AlertBanner>
             </div>
           )}
         </div>
@@ -247,9 +251,11 @@ const AddressChangeForm: FC<Props> = ({
           )}
           {step < LAST_STEP ? (
             <>
-              <Button isDisabled={isSaving} onPress={() => void saveDraft()} variant="secondary">
-                Save draft
-              </Button>
+              {step > 1 && (
+                <Button isDisabled={isSaving} onPress={() => void saveDraft()} variant="secondary">
+                  Save draft
+                </Button>
+              )}
               <Button
                 isDisabled={isSaving || !areFieldsValid(currentValues, fields[step])}
                 onPress={() => void next()}
