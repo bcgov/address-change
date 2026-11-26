@@ -22,6 +22,7 @@
     "start:prod": "node dist/main",
     "flat-files:generate": "nest start --entryFile flat-file/generate-flat-files",
     "flat-files:transfer": "nest start --entryFile flat-file/transfer-flat-files",
+    "data:purge": "nest start --entryFile retention/purge-expired-data",
     "flat-files:run": "nest start --entryFile flat-file/run-flat-files",
     "flat-files:run:prod": "node dist/flat-file/run-flat-files.js",
     "s3:test-upload": "node dist/flat-file/test-s3-upload.js",

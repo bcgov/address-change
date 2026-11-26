@@ -94,6 +94,18 @@ parameters:
   - name: ALLOW_DATA_RESET
     description: Enables the resident self-service data deletion route; must be "false" in production
     value: "false"
+  - name: DATA_RETENTION_DAYS
+    description: Requests, their personal data and flat files older than this many days are deleted (minimum 7; batches from the last 7 days are always kept)
+    value: "30"
+  - name: DATA_PURGE_S3_FLAT_FILES
+    description: Scan the entire configured flat-file bucket for expired objects ("true" or "false")
+    value: "true"
+  - name: S3_RETENTION_DAYS
+    description: Object age in days before S3 deletion, using LastModified (overwrites restart age)
+    value: "60"
+  - name: DATA_PURGE_SCHEDULE
+    description: Cron schedule (UTC) for the retention purge job
+    value: "0 10 * * *"
   - name: FLAT_FILE_JOB_SUSPEND
     description: Set false only in environments configured for partner deliveries
     value: "true"
@@ -471,6 +483,116 @@ objects:
               value: 50
               periodSeconds: 60
           selectPolicy: Max
+  - apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      labels:
+        app: ${NAME}-${ZONE}
+      name: ${NAME}-${ZONE}-data-purge
+    spec:
+      schedule: ${DATA_PURGE_SCHEDULE}
+      concurrencyPolicy: Forbid
+      startingDeadlineSeconds: 3600
+      successfulJobsHistoryLimit: 3
+      failedJobsHistoryLimit: 3
+      jobTemplate:
+        spec:
+          backoffLimit: 2
+          activeDeadlineSeconds: 1800
+          template:
+            metadata:
+              labels:
+                app: ${NAME}-${ZONE}
+                worker: ${NAME}-${ZONE}-data-purge
+                database-client: ${DB_CLIENT}
+            spec:
+              restartPolicy: Never
+              containers:
+                - name: data-purge
+                  image: ${REGISTRY}/${ORG_NAME}/${NAME}/${COMPONENT}:${IMAGE_TAG}
+                  imagePullPolicy: Always
+                  command: ["node", "/app/dist/retention/purge-expired-data.js"]
+                  env:
+                    - name: LOG_LEVEL
+                      value: ${LOG_LEVEL}
+                    - name: POSTGRES_HOST
+                      value: ${DB_HOST}
+                    - name: POSTGRES_PORT
+                      value: "${DB_PORT}"
+                    - name: POSTGRES_DATABASE
+                      value: ${DB_NAME}
+                    - name: POSTGRES_USER
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${DB_RUNTIME_SECRET}
+                          key: ${DB_USERNAME_KEY}
+                    - name: POSTGRES_PASSWORD
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${DB_RUNTIME_SECRET}
+                          key: ${DB_PASSWORD_KEY}
+                    - name: POSTGRES_SSLMODE
+                      value: ${DB_SSLMODE}
+                    - name: POSTGRES_SCHEMA
+                      value: "address_change"
+                    - name: DATA_RETENTION_DAYS
+                      value: "${DATA_RETENTION_DAYS}"
+                    - name: DATA_PURGE_S3_FLAT_FILES
+                      value: "${DATA_PURGE_S3_FLAT_FILES}"
+                    - name: S3_RETENTION_DAYS
+                      value: "${S3_RETENTION_DAYS}"
+                    - name: FLAT_FILE_S3_BUCKET
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${S3_SECRET}
+                          key: FLAT_FILE_S3_BUCKET
+                          optional: true
+                    - name: AWS_REGION
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${S3_SECRET}
+                          key: AWS_REGION
+                          optional: true
+                    - name: FLAT_FILE_S3_ENDPOINT
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${S3_SECRET}
+                          key: FLAT_FILE_S3_ENDPOINT
+                          optional: true
+                    - name: AWS_ACCESS_KEY_ID
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${S3_SECRET}
+                          key: AWS_ACCESS_KEY_ID
+                          optional: true
+                    - name: AWS_SECRET_ACCESS_KEY
+                      valueFrom:
+                        secretKeyRef:
+                          name: ${S3_SECRET}
+                          key: AWS_SECRET_ACCESS_KEY
+                          optional: true
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: ${MEMORY_REQUEST}
+                    limits:
+                      memory: 512Mi
+                  securityContext:
+                    allowPrivilegeEscalation: false
+                    runAsNonRoot: true
+                    readOnlyRootFilesystem: true
+                    capabilities:
+                      drop: ["ALL"]
+                    seccompProfile:
+                      type: RuntimeDefault
+                  volumeMounts:
+                    - name: tmp
+                      mountPath: /tmp
+              volumes:
+                - name: tmp
+                  emptyDir:
+                    medium: Memory
+                    sizeLimit: 64Mi
   - apiVersion: policy/v1
     kind: PodDisruptionBudget
     metadata:
