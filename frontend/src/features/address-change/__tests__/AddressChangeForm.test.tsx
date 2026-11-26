@@ -81,7 +81,7 @@ describe('AddressChangeForm step flow', () => {
       expect.objectContaining({ step: 1 }),
     )
 
-    await click('Previous')
+    await click('Back')
     expect(await screen.findByRole('region', { name: 'Collection notice' })).toBeInTheDocument()
   })
 
@@ -151,7 +151,7 @@ describe('AddressChangeForm step flow', () => {
     await click('Continue')
 
     expect(await screen.findByText('1 Main St, Victoria, BC, V8V 1A1, Canada')).toBeInTheDocument()
-    await click('Submit request')
+    await click('Continue')
 
     expect(await screen.findByText('req-1')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Return to home' })).toBeInTheDocument()

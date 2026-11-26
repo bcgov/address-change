@@ -134,6 +134,22 @@ export function areFieldsValid(values: AddressChangeFormValues, names: StepField
   )
 }
 
+/** Returns the values with any invalid field among `names` reset to its default, so only valid input is kept. */
+export function withValidFieldsOnly(
+  values: AddressChangeFormValues,
+  names: StepFields,
+): AddressChangeFormValues {
+  const result = addressChangeFormSchema.safeParse(values)
+  if (result.success) return values
+  const defaults = defaultFormValues()
+  const invalid = new Set(result.error.issues.map((issue) => issue.path[0]))
+  const cleaned = { ...values }
+  for (const name of names) {
+    if (invalid.has(name)) Object.assign(cleaned, { [name]: defaults[name] })
+  }
+  return cleaned
+}
+
 const toApiAddress = (address: Partial<TokenAddress>) => ({
   country: address.country ?? '',
   addressLineOne: address.addressLineOne ?? '',
