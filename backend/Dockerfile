@@ -26,6 +26,8 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=build /app/generated ./generated
 COPY --from=build /app/dist ./dist
 
+COPY scripts/load-vault-env.cjs /app/load-vault-env.cjs
+
 # Boilerplate, not used in OpenShift/Kubernetes
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s CMD curl -f http://localhost:3000/api

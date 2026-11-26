@@ -666,6 +666,15 @@ fieldset.app-card {
 }
 
 /* ICBC requirements */
+.large-radio-group .bcds-react-aria-RadioGroup {
+  gap: var(--layout-margin-medium);
+}
+
+.large-radio-group .bcds-react-aria-RadioGroup--label {
+  font-size: var(--typography-font-size-h5);
+  font-weight: var(--typography-font-weights-regular);
+}
+
 .icbc-requirements {
   display: flex;
   flex-wrap: wrap;

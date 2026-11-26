@@ -32,7 +32,7 @@ export const STEP_LABELS = [
   'Collection notice',
   'Review your information',
   'Provide new address',
-  'Who needs to know?',
+  'Partner details',
   'Review and submit',
 ]
 const LAST_STEP = STEP_LABELS.length - 1

@@ -32,10 +32,22 @@ def backend(environment):
         DB_NAME='address_change' if patroni else 'app',
         DB_RUNTIME_SECRET='address-change-db-runtime' if patroni else disposable,
         DB_MIGRATION_SECRET='address-change-db-migration' if patroni else disposable,
+        DB_SECRET_OPTIONAL='true' if patroni else 'false',
         DB_USERNAME_KEY='username' if patroni else 'database-user',
         DB_PASSWORD_KEY='password' if patroni else 'database-password',
         DB_SSLMODE='require' if patroni else 'disable',
         DB_CLIENT='address-change' if patroni else 'disposable',
+        OIDC_ISSUER='https://issuer.invalid', OIDC_AUDIENCE='fixture',
+        OIDC_JWKS_URI='https://issuer.invalid/jwks', OIDC_SUBMISSION_SCOPE='fixture',
+        ENCRYPTION_KEY_ID='v1',
+        VAULT_APP_PATH=('b5cfc6-prod' if environment == 'prod' else 'b5cfc6-nonprod')
+        + f'/data/address-change-api-{environment if patroni else "dev"}/address-change-app',
+        VAULT_DB_PATH=('b5cfc6-prod' if environment == 'prod' else 'b5cfc6-nonprod')
+        + f'/data/address-change-api-{environment}/address-change-db',
+        VAULT_DATABASE_ENABLED='true' if patroni else 'false',
+        VAULT_ROLE='b5cfc6-prod' if environment == 'prod' else 'b5cfc6-nonprod',
+        VAULT_S3_PATH=('b5cfc6-prod' if environment == 'prod' else 'b5cfc6-nonprod')
+        + f'/data/address-change-api-{environment}/address-change-s3',
     )[0]['spec']['template']
 
 
@@ -49,7 +61,23 @@ class DatabaseTemplates(unittest.TestCase):
         for target in ('test', 'prod'):
             with self.subTest(target=target):
                 pod = backend(target)
+                self.assertEqual(pod['spec']['serviceAccountName'], 'b5cfc6-vault')
+                self.assertFalse(pod['spec']['automountServiceAccountToken'])
+                token_volume = next(v for v in pod['spec']['volumes']
+                                    if v['name'] == 'vault-auth-token')
+                self.assertEqual(token_volume['projected']['sources'][0]
+                                 ['serviceAccountToken']['expirationSeconds'], 600)
+                for container in pod['spec']['containers'] + pod['spec']['initContainers']:
+                    self.assertFalse(any(v['name'] == 'vault-auth-token'
+                                         for v in container.get('volumeMounts', [])))
+                annotations = pod['metadata']['annotations']
+                self.assertEqual(annotations['vault.hashicorp.com/agent-init-first'], 'true')
+                mount = 'b5cfc6-prod' if target == 'prod' else 'b5cfc6-nonprod'
+                self.assertEqual(annotations['vault.hashicorp.com/agent-inject-secret-s3.json'],
+                                 f'{mount}/data/address-change-api-{target}/address-change-s3')
+                self.assertIn('/app/load-vault-env.cjs', pod['spec']['containers'][0]['command'])
                 runtime = env(pod['spec']['containers'][0])
+                self.assertNotIn('AWS_SECRET_ACCESS_KEY', runtime)
                 migration = env(pod['spec']['initContainers'][1])
                 self.assertEqual(runtime['POSTGRES_HOST']['value'], 'address-change-db-patroni')
                 self.assertEqual(runtime['POSTGRES_DATABASE']['value'], 'address_change')
@@ -58,14 +86,28 @@ class DatabaseTemplates(unittest.TestCase):
                 self.assertEqual(migration['FLYWAY_DEFAULT_SCHEMA']['value'], 'address_change')
                 self.assertIn('?sslmode=require', migration['FLYWAY_URL']['value'])
                 self.assertEqual(runtime['POSTGRES_PASSWORD']['valueFrom']['secretKeyRef'],
-                                 {'name': 'address-change-db-runtime', 'key': 'password'})
+                                 {'name': 'address-change-db-runtime', 'key': 'password', 'optional': True})
                 self.assertEqual(migration['FLYWAY_PASSWORD']['valueFrom']['secretKeyRef'],
-                                 {'name': 'address-change-db-migration', 'key': 'password'})
+                                 {'name': 'address-change-db-migration', 'key': 'password', 'optional': True})
                 self.assertEqual(pod['metadata']['labels']['database-client'], 'address-change')
                 self.assertNotIn('address-change-db-migration', json.dumps(pod['spec']['containers']))
                 self.assertNotIn('address-change-db-patroni', json.dumps(runtime['POSTGRES_PASSWORD']))
                 self.assertIn('address-change-db-patroni 5432',
                               pod['spec']['initContainers'][0]['command'][-1])
+
+    def test_migration_credentials_have_a_dedicated_volume(self):
+        pod = backend('test')
+        annotations = pod['metadata']['annotations']
+        self.assertEqual(annotations['vault.hashicorp.com/agent-copy-volume-mounts'],
+                         'migrations')
+        self.assertEqual(annotations['vault.hashicorp.com/agent-inject-file-db-migration.json'],
+                         '../migration/db-migration.json')
+        migrations = next(c for c in pod['spec']['initContainers'] if c['name'] == 'migrations')
+        self.assertIn({'name': 'vault-migration', 'mountPath': '/vault/migration'},
+                      migrations['volumeMounts'])
+        for container in pod['spec']['containers']:
+            self.assertFalse(any(v['name'] == 'vault-migration'
+                                 for v in container.get('volumeMounts', [])))
 
     def test_pr_database_remains_isolated(self):
         pod = backend('123')
@@ -76,9 +118,9 @@ class DatabaseTemplates(unittest.TestCase):
         self.assertEqual(runtime['POSTGRES_SCHEMA']['value'], 'address_change')
         self.assertEqual(runtime['POSTGRES_SSLMODE']['value'], 'disable')
         self.assertEqual(runtime['POSTGRES_PASSWORD']['valueFrom']['secretKeyRef'],
-                         {'name': 'address-change-123-database', 'key': 'database-password'})
+                         {'name': 'address-change-123-database', 'key': 'database-password', 'optional': False})
         self.assertEqual(migration['FLYWAY_USER']['valueFrom']['secretKeyRef'],
-                         {'name': 'address-change-123-database', 'key': 'database-user'})
+                         {'name': 'address-change-123-database', 'key': 'database-user', 'optional': False})
         self.assertEqual(pod['metadata']['labels']['database-client'], 'disposable')
         self.assertNotIn('address-change-db-runtime', json.dumps(pod))
 

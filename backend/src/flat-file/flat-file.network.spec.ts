@@ -44,6 +44,9 @@ describe.skipIf(!hasOc)('flat-file worker database ingress', () => {
       OIDC_JWKS_URI: 'https://example.invalid/jwks',
       OIDC_SUBMISSION_SCOPE: 'fixture',
       ENCRYPTION_KEY_ID: 'fixture',
+      VAULT_APP_PATH: 'b5cfc6-nonprod/data/address-change-api-dev/address-change-app',
+      VAULT_ROLE: 'b5cfc6-nonprod',
+      VAULT_S3_PATH: 'b5cfc6-nonprod/data/address-change-api-dev/address-change-s3',
     })
     const worker = objects.find((object: { kind: string }) => object.kind === 'CronJob').spec
       .jobTemplate.spec.template.metadata.labels

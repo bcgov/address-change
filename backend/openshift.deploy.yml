@@ -48,6 +48,9 @@ parameters:
     required: true
   - name: DB_MIGRATION_SECRET
     required: true
+  - name: DB_SECRET_OPTIONAL
+    description: Legacy credential references are optional only when Vault supplies database credentials
+    value: "false"
   - name: DB_USERNAME_KEY
     value: username
   - name: DB_PASSWORD_KEY
@@ -58,12 +61,12 @@ parameters:
   - name: DB_CLIENT
     description: Label used by the loc-tools Patroni ingress policy
     value: disposable
-  - name: SFTP_SECRET
-    description: Secret holding SFTP_CREDENTIAL_ENCRYPTION_KEY (base64, 32 bytes); created manually per namespace
-    value: address-change-sftp
-  - name: S3_SECRET
-    description: Optional Secret with bucket, endpoint, region, and AWS credential keys
-    value: address-change-s3
+  - name: VAULT_S3_PATH
+    description: KV v2 API path for this environment's S3 settings
+    required: true
+  - name: VAULT_ROLE
+    description: Platform Vault role (b5cfc6-nonprod or b5cfc6-prod)
+    required: true
   - name: OIDC_ISSUER
     description: OIDC issuer URL used to validate access tokens
     required: true
@@ -79,9 +82,15 @@ parameters:
   - name: ENCRYPTION_KEY_ID
     description: ID of the active request encryption key
     required: true
-  - name: APP_SECRET
-    description: Pre-created Secret holding ADDRESS_CHANGE_ENCRYPTION_KEYS
-    value: address-change-app
+  - name: VAULT_APP_PATH
+    description: KV v2 API path containing both application encryption fields
+    required: true
+  - name: VAULT_DB_PATH
+    description: KV v2 API base path for shared database credentials
+    value: unused
+  - name: VAULT_DATABASE_ENABLED
+    description: Use Vault for TEST/PROD database credentials
+    value: "false"
   - name: ALLOW_DATA_RESET
     description: Enables the resident self-service data deletion route; must be "false" in production
     value: "false"
@@ -106,11 +115,59 @@ objects:
           maxSurge: 1
       template:
         metadata:
+          annotations:
+            <<: &vault-runtime-annotations
+              vault.hashicorp.com/agent-inject: "true"
+              vault.hashicorp.com/agent-inject-token: "false"
+              vault.hashicorp.com/agent-pre-populate-only: "true"
+              vault.hashicorp.com/agent-init-first: "true"
+              vault.hashicorp.com/agent-service-account-token-volume-name: vault-auth-token
+              vault.hashicorp.com/auth-path: auth/k8s-gold
+              vault.hashicorp.com/namespace: platform-services
+              vault.hashicorp.com/role: ${VAULT_ROLE}
+              vault.hashicorp.com/agent-requests-cpu: "10m"
+              vault.hashicorp.com/agent-limits-cpu: "50m"
+              vault.hashicorp.com/agent-requests-mem: "25Mi"
+              vault.hashicorp.com/agent-limits-mem: "100Mi"
+              vault.hashicorp.com/agent-inject-secret-s3.json: ${VAULT_S3_PATH}
+              vault.hashicorp.com/agent-inject-template-s3.json: |
+                {{- with secret "${VAULT_S3_PATH}" -}}
+                {{ .Data.data | toJSON }}
+                {{- end }}
+              vault.hashicorp.com/agent-inject-secret-app.json: ${VAULT_APP_PATH}
+              vault.hashicorp.com/agent-inject-template-app.json: |
+                {{- with secret "${VAULT_APP_PATH}" -}}
+                {{ .Data.data | toJSON }}
+                {{- end }}
+              vault.hashicorp.com/agent-inject-secret-db-runtime.json: ${VAULT_DB_PATH}/runtime
+              vault.hashicorp.com/agent-inject-template-db-runtime.json: |
+                {{- if eq "${VAULT_DATABASE_ENABLED}" "true" -}}
+                {{- with secret "${VAULT_DB_PATH}/runtime" -}}
+                {"POSTGRES_USER": {{ .Data.data.username | toJSON }}, "POSTGRES_PASSWORD": {{ .Data.data.password | toJSON }}}
+                {{- end -}}
+                {{- else -}}
+                {}
+                {{- end }}
+            # Copy Flyway's dedicated volume into the Vault init container only.
+            vault.hashicorp.com/agent-copy-volume-mounts: migrations
+            # Resolved relative to /vault/secrets, into the dedicated Flyway volume.
+            vault.hashicorp.com/agent-inject-file-db-migration.json: ../migration/db-migration.json
+            vault.hashicorp.com/agent-inject-secret-db-migration.json: ${VAULT_DB_PATH}/migration
+            vault.hashicorp.com/agent-inject-template-db-migration.json: |
+              {{- if eq "${VAULT_DATABASE_ENABLED}" "true" -}}
+              {{- with secret "${VAULT_DB_PATH}/migration" -}}
+              {{ .Data.data | toJSON }}
+              {{- end -}}
+              {{- else -}}
+              {}
+              {{- end }}
           labels:
             app: ${NAME}-${ZONE}
             deployment: ${NAME}-${ZONE}-${COMPONENT}
             database-client: ${DB_CLIENT}
         spec:
+          serviceAccountName: b5cfc6-vault
+          automountServiceAccountToken: false
           terminationGracePeriodSeconds: 30
           affinity:
             podAntiAffinity:
@@ -156,6 +213,8 @@ objects:
               image: ${REGISTRY}/${ORG_NAME}/${NAME}/migrations:${IMAGE_TAG}
               imagePullPolicy: Always
               env:
+                - name: VAULT_DATABASE_ENABLED
+                  value: "${VAULT_DATABASE_ENABLED}"
                 - name: POSTGRES_DATABASE
                   value: ${DB_NAME}
                 - name: FLYWAY_URL
@@ -165,11 +224,13 @@ objects:
                     secretKeyRef:
                       name: ${DB_MIGRATION_SECRET}
                       key: ${DB_USERNAME_KEY}
+                      optional: ${{DB_SECRET_OPTIONAL}}
                 - name: FLYWAY_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: ${DB_MIGRATION_SECRET}
                       key: ${DB_PASSWORD_KEY}
+                      optional: ${{DB_SECRET_OPTIONAL}}
                 - name: FLYWAY_DEFAULT_SCHEMA
                   value: "address_change"
               resources:
@@ -185,6 +246,8 @@ objects:
                 seccompProfile:
                   type: RuntimeDefault
               volumeMounts:
+                - name: vault-migration
+                  mountPath: /vault/migration
                 - name: tmp
                   mountPath: /tmp
           containers:
@@ -194,7 +257,16 @@ objects:
               ports:
                 - name: http
                   containerPort: 3000
+              command: ["node", "--require", "/app/load-vault-env.cjs", "/app/dist/main"]
               env: &backend-environment
+                - name: VAULT_ENV_FILES
+                  value: '["/vault/secrets/s3.json","/vault/secrets/app.json","/vault/secrets/db-runtime.json"]'
+                - name: VAULT_REQUIRED_KEYS
+                  value: '["AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","FLAT_FILE_S3_BUCKET","FLAT_FILE_S3_ENDPOINT","ADDRESS_CHANGE_ENCRYPTION_KEYS","SFTP_CREDENTIAL_ENCRYPTION_KEY"]'
+                - name: VAULT_DATABASE_ENABLED
+                  value: "${VAULT_DATABASE_ENABLED}"
+                - name: VAULT_OVERRIDE_KEYS
+                  value: '["POSTGRES_USER","POSTGRES_PASSWORD"]'
                 - name: LOG_LEVEL
                   value: ${LOG_LEVEL}
                 - name: POSTGRES_HOST
@@ -208,51 +280,17 @@ objects:
                     secretKeyRef:
                       name: ${DB_RUNTIME_SECRET}
                       key: ${DB_USERNAME_KEY}
+                      optional: ${{DB_SECRET_OPTIONAL}}
                 - name: POSTGRES_PASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: ${DB_RUNTIME_SECRET}
                       key: ${DB_PASSWORD_KEY}
+                      optional: ${{DB_SECRET_OPTIONAL}}
                 - name: POSTGRES_SSLMODE
                   value: ${DB_SSLMODE}
                 - name: POSTGRES_SCHEMA
                   value: "address_change"
-                - name: SFTP_CREDENTIAL_ENCRYPTION_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${SFTP_SECRET}
-                      key: SFTP_CREDENTIAL_ENCRYPTION_KEY
-                      optional: true
-                - name: FLAT_FILE_S3_BUCKET
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: FLAT_FILE_S3_BUCKET
-                      optional: true
-                - name: AWS_REGION
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: AWS_REGION
-                      optional: true
-                - name: FLAT_FILE_S3_ENDPOINT
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: FLAT_FILE_S3_ENDPOINT
-                      optional: true
-                - name: AWS_ACCESS_KEY_ID
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: AWS_ACCESS_KEY_ID
-                      optional: true
-                - name: AWS_SECRET_ACCESS_KEY
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${S3_SECRET}
-                      key: AWS_SECRET_ACCESS_KEY
-                      optional: true
                 - name: OIDC_ISSUER
                   value: ${OIDC_ISSUER}
                 - name: OIDC_AUDIENCE
@@ -265,11 +303,6 @@ objects:
                   value: ${ENCRYPTION_KEY_ID}
                 - name: ALLOW_DATA_RESET
                   value: "${ALLOW_DATA_RESET}"
-                - name: ADDRESS_CHANGE_ENCRYPTION_KEYS
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${APP_SECRET}
-                      key: ADDRESS_CHANGE_ENCRYPTION_KEYS
               resources:
                 requests:
                   cpu: ${CPU_REQUEST}
@@ -311,6 +344,16 @@ objects:
                     # distroless/nodejs has no /bin/sleep; exec hooks skip image ENTRYPOINT
                     command: ["/nodejs/bin/node", "-e", "setTimeout(() => {}, 10000)"]
           volumes:
+            - name: vault-migration
+              emptyDir:
+                medium: Memory
+                sizeLimit: 1Mi
+            - name: vault-auth-token
+              projected:
+                sources:
+                  - serviceAccountToken:
+                      path: token
+                      expirationSeconds: 600
             - name: tmp
               emptyDir:
                 medium: Memory
@@ -336,6 +379,7 @@ objects:
           ttlSecondsAfterFinished: 86400
           template:
             metadata:
+              annotations: *vault-runtime-annotations
               labels:
                 app: ${NAME}-${ZONE}
                 worker: ${NAME}-${ZONE}-flat-files
@@ -343,12 +387,13 @@ objects:
             spec:
               restartPolicy: Never
               terminationGracePeriodSeconds: 30
+              serviceAccountName: b5cfc6-vault
               automountServiceAccountToken: false
               containers:
                 - name: flat-files
                   image: ${REGISTRY}/${ORG_NAME}/${NAME}/${COMPONENT}:${IMAGE_TAG}
                   imagePullPolicy: Always
-                  command: ["node", "/app/dist/flat-file/run-flat-files.js"]
+                  command: ["node", "--require", "/app/load-vault-env.cjs", "/app/dist/flat-file/run-flat-files.js"]
                   env: *backend-environment
                   resources:
                     requests:
@@ -368,6 +413,12 @@ objects:
                     - name: tmp
                       mountPath: /tmp
               volumes:
+                - name: vault-auth-token
+                  projected:
+                    sources:
+                      - serviceAccountToken:
+                          path: token
+                          expirationSeconds: 600
                 - name: tmp
                   emptyDir:
                     medium: Memory

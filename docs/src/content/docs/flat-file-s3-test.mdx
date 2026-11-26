@@ -7,7 +7,22 @@ Use the backend's `s3:test-upload` command to verify that the configured object-
 
 ## Required configuration
 
-Provide these environment variables from an approved local secret source or the environment-specific OpenShift Secret named `address-change-s3`:
+OpenShift deployments read S3 configuration from Vault using the
+`b5cfc6-vault` service account and the platform Vault Agent Injector.
+
+| Environment | KV v2 API path |
+| --- | --- |
+| DEV and PR previews | `b5cfc6-nonprod/data/address-change-api-dev/address-change-s3` |
+| TEST | `b5cfc6-nonprod/data/address-change-api-test/address-change-s3` |
+| PROD | `b5cfc6-prod/data/address-change-api-prod/address-change-s3` |
+
+Create the secret before deployment. All four S3 fields below are required at
+startup in every environment, including previews. The Agent renders JSON into
+`/vault/secrets/s3.json` before migrations and application startup. The API and
+flat-file worker preload `/app/load-vault-env.cjs` to load it.
+
+For local testing, provide the same environment variables through an approved
+local secret source.
 
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
@@ -15,10 +30,41 @@ Provide these environment variables from an approved local secret source or the 
 - `FLAT_FILE_S3_ENDPOINT` (e.g. the BC Gov Object Storage endpoint)
 - `AWS_REGION` (optional; the application defaults to `ca-central-1` when empty or unset)
 
-Do not put credentials in this documentation, source control, or command-line arguments. Rotate any credentials that have been exposed and use the replacement values in the Secret.
+Do not put credentials in this documentation, source control, or command-line arguments. Rotate any credentials that have been exposed and use the replacement values in Vault. Restart API pods to load updated values.
+New worker pods fetch the current values when they start.
 
 ## Run the test
 
 From `backend/`, build the application once, then run `npm run s3:test-upload` in a shell where the variables above are available. The command uploads under `address_change/flat-files/connectivity-test/` and prints the object URI after successful verification and cleanup. It does not access the database or SFTP. No real credentials or network upload are used by its unit tests.
 
 The command uses the same S3 transport and configuration as flat-file archival, so it checks the application's actual upload, download, and delete permissions. The identity needs permission to put, get, and delete objects in the configured test bucket/prefix.
+
+## Runtime loading and permissions
+
+The generic loader reads the JSON files listed in `VAULT_ENV_FILES` and checks
+the names in `VAULT_REQUIRED_KEYS`. Every entry must be a string environment
+value. Duplicate names across files and collisions with existing container
+environment variables fail startup unless the deployment explicitly lists the
+variable in `VAULT_OVERRIDE_KEYS`. TEST/PROD allow replacement of the two legacy
+database environment values, and require both values to come from Vault. Move a variable's definition to Vault when
+adding it to an injected file. Parser errors report the source file without
+echoing its contents.
+
+`AWS_REGION` is optional. The S3 transport explicitly defaults to
+`ca-central-1`. Add it to the Vault secret if the provider requires another
+signing region.
+
+The platform service account requires image-pull access to the tools namespace
+if the deployment uses its image registry. This permission was verified for
+DEV, TEST, and PROD. The Agent authenticates using a dedicated short-lived
+projected service-account token volume. Application containers have automatic
+token mounting disabled.
+
+To test from a running backend pod, use its actual container name.
+
+```sh
+oc -n b5cfc6-dev exec <pod-name> -c address-change --   node --require /app/load-vault-env.cjs /app/dist/flat-file/test-s3-upload.js
+```
+
+The preloader reads the injected files for this separate process. Verify the
+projected-token injection in TEST as part of rollout.
