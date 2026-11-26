@@ -113,6 +113,18 @@ describe('withValidFieldsOnly', () => {
     )
     expect(saved.collectionNoticeAcknowledged).toBe(false)
   })
+
+  test('still drops an invalid licence number when an unrelated base field is invalid', () => {
+    const base = filled()
+    const values = {
+      ...base,
+      residentialAddress: { ...base.residentialAddress, region: 'AB' },
+      icbc: { ...base.icbc, driversLicenseNumber: 'bad' },
+    }
+    const saved = withValidFieldsOnly(values, stepFields(true)[3])
+    expect(saved.icbc.driversLicenseNumber).toBe('')
+    expect(saved.icbc.heightCm).toBe('175')
+  })
 })
 
 describe('toAddressChangeRequest', () => {

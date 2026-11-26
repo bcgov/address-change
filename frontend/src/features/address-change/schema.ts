@@ -22,6 +22,43 @@ const inRange = (value: string, min: number, max: number) => {
   return /^\d+$/.test(value.trim()) && number >= min && number <= max
 }
 
+const conditionalIssues = (values: {
+  mailingSameAsResidential: boolean
+  mailingAddress: unknown
+  notifyIcbc: boolean
+  icbc: {
+    driversLicenseNumber: string
+    heightCm: string
+    weightKg: string
+    securityKeyword: string
+  }
+}): z.IssueData[] => {
+  const issues: z.IssueData[] = []
+  if (!values.mailingSameAsResidential) {
+    const result = addressSchema.safeParse(values.mailingAddress)
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        issues.push({ ...issue, path: ['mailingAddress', ...issue.path] })
+      }
+    }
+  }
+  if (!values.notifyIcbc) return issues
+  const { driversLicenseNumber, heightCm, weightKg, securityKeyword } = values.icbc
+  const fail = (field: string, message: string) =>
+    issues.push({ code: 'custom', message, path: ['icbc', field] })
+  if (!/^\d{7,8}$/.test(driversLicenseNumber.trim())) {
+    fail('driversLicenseNumber', 'Enter your 7 or 8 digit driver’s licence number')
+  }
+  if (!inRange(heightCm, 50, 275)) {
+    fail('heightCm', 'Enter your height in cm, as shown on your licence')
+  }
+  if (!inRange(weightKg, 20, 400)) {
+    fail('weightKg', 'Enter your weight in kg, as shown on your licence')
+  }
+  if (!securityKeyword.trim()) fail('securityKeyword', 'Enter your security keyword')
+  return issues
+}
+
 export const addressChangeFormSchema = z
   .object({
     collectionNoticeAcknowledged: z
@@ -49,31 +86,22 @@ export const addressChangeFormSchema = z
     }),
   })
   .superRefine((values, ctx) => {
-    if (!values.mailingSameAsResidential) {
-      const result = addressSchema.safeParse(values.mailingAddress)
-      if (!result.success) {
-        for (const issue of result.error.issues) {
-          ctx.addIssue({ ...issue, path: ['mailingAddress', ...issue.path] })
-        }
-      }
-    }
-    if (!values.notifyIcbc) return
-    const { driversLicenseNumber, heightCm, weightKg, securityKeyword } = values.icbc
-    const fail = (field: string, message: string) =>
-      ctx.addIssue({ code: 'custom', message, path: ['icbc', field] })
-    if (!/^\d{7,8}$/.test(driversLicenseNumber.trim())) {
-      fail('driversLicenseNumber', 'Enter your 7 or 8 digit driver’s licence number')
-    }
-    if (!inRange(heightCm, 50, 275)) {
-      fail('heightCm', 'Enter your height in cm, as shown on your licence')
-    }
-    if (!inRange(weightKg, 20, 400)) {
-      fail('weightKg', 'Enter your weight in kg, as shown on your licence')
-    }
-    if (!securityKeyword.trim()) fail('securityKeyword', 'Enter your security keyword')
+    for (const issue of conditionalIssues(values)) ctx.addIssue(issue)
   })
 
 export type AddressChangeFormValues = z.infer<typeof addressChangeFormSchema>
+
+/** All schema issues; zod skips the conditional checks when a base field fails, so they run separately here. */
+function allIssues(values: AddressChangeFormValues): z.ZodIssue[] {
+  const result = addressChangeFormSchema.safeParse(values)
+  if (result.success) return []
+  const extra = conditionalIssues(values).map((issue) => ({
+    ...issue,
+    message: issue.message ?? '',
+    path: issue.path ?? [],
+  })) as z.ZodIssue[]
+  return [...result.error.issues, ...extra]
+}
 
 export const emptyAddress = {
   addressLineOne: '',
@@ -127,9 +155,7 @@ export const stepFields = (hasBirthdate: boolean): readonly StepFields[] => [
 /** True when no schema issue falls on the given fields, so the step can be left. */
 export function areFieldsValid(values: AddressChangeFormValues, names: StepFields): boolean {
   if (names.length === 0) return true
-  const result = addressChangeFormSchema.safeParse(values)
-  if (result.success) return true
-  return !result.error.issues.some((issue) =>
+  return !allIssues(values).some((issue) =>
     names.includes(issue.path[0] as keyof AddressChangeFormValues),
   )
 }
@@ -139,11 +165,11 @@ export function withValidFieldsOnly(
   values: AddressChangeFormValues,
   names: StepFields,
 ): AddressChangeFormValues {
-  const result = addressChangeFormSchema.safeParse(values)
-  if (result.success) return values
+  const issues = allIssues(values)
+  if (issues.length === 0) return values
   const defaults = defaultFormValues() as Record<string, unknown>
   const cleaned = structuredClone(values) as Record<string, unknown>
-  for (const issue of result.error.issues) {
+  for (const issue of issues) {
     const [root, ...rest] = issue.path as string[]
     if (!names.includes(root as keyof AddressChangeFormValues)) continue
     if (rest.length === 0) {

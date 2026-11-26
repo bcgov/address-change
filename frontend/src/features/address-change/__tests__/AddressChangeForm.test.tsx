@@ -207,25 +207,26 @@ describe('AddressChangeForm step flow', () => {
         },
       },
     })
-    await click('Save draft')
+    const saveButton = screen.getByRole('button', { name: 'Save draft' })
+    expect(saveButton).toBeDisabled()
+    await userEvent.type(screen.getByLabelText(/Address line 1/), ' B')
+    await waitFor(() => expect(saveButton).toBeEnabled())
+    await userEvent.click(saveButton)
 
     expect(await screen.findByText('Draft saved.')).toBeInTheDocument()
+    expect(saveButton).toBeDisabled()
     expect(screen.getByText('New residential address')).toBeInTheDocument()
     expect(onDraftCreated).not.toHaveBeenCalled()
     const [, payload] = vi.mocked(saveAddressChangeDraft).mock.calls[0]
     expect(payload.step).toBe(2)
     expect(payload.values.residentialAddress).toMatchObject({
-      addressLineOne: '1 Main St',
+      addressLineOne: '1 Main St B',
       locality: 'Victoria',
       postalCode: '',
     })
 
     await userEvent.click(screen.getByRole('button', { name: /close/i }))
     await waitFor(() => expect(screen.queryByText('Draft saved.')).not.toBeInTheDocument())
-
-    await click('Save draft')
-    await screen.findByText('Draft saved.')
-    expect(onDraftCreated).not.toHaveBeenCalled()
   })
 
   test('Save draft on a new request reports the created draft once', async () => {
@@ -241,6 +242,7 @@ describe('AddressChangeForm step flow', () => {
   test('Save draft shows an error when saving fails', async () => {
     vi.mocked(saveAddressChangeDraft).mockRejectedValue(new Error('down'))
     renderForm({ initialDraft: { idempotencyKey: 'k', step: 2, values: {} } })
+    await userEvent.type(screen.getByLabelText(/Address line 1/), '1 Main St')
     await click('Save draft')
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument()
     expect(screen.queryByText('Draft saved.')).not.toBeInTheDocument()

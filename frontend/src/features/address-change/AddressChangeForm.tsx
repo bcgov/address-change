@@ -67,6 +67,7 @@ const AddressChangeForm: FC<Props> = ({
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const { control, handleSubmit, watch, setValue, getValues, trigger, formState } =
     useForm<AddressChangeFormValues>({
@@ -88,6 +89,11 @@ const AddressChangeForm: FC<Props> = ({
     headingRef.current?.focus({ preventScroll: true })
   }, [step, phase])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: capture the loaded draft once on mount
+  useEffect(() => {
+    if (initialDraft) setSavedSnapshot(JSON.stringify(getValues()))
+  }, [])
+
   if (!user) return null
   const fields = stepFields(Boolean(user.birthdate))
 
@@ -108,6 +114,7 @@ const AddressChangeForm: FC<Props> = ({
     setIsSaving(true)
     try {
       const savedId = await draft.save(target, getValues())
+      setSavedSnapshot(JSON.stringify(getValues()))
       if (!draftAnnouncedRef.current) {
         draftAnnouncedRef.current = true
         onDraftCreated?.(savedId)
@@ -135,6 +142,7 @@ const AddressChangeForm: FC<Props> = ({
     setIsSaving(true)
     try {
       const savedId = await draft.save(step, withValidFieldsOnly(getValues(), fields[step]))
+      setSavedSnapshot(JSON.stringify(getValues()))
       if (!draftAnnouncedRef.current) {
         draftAnnouncedRef.current = true
         onDraftCreated?.(savedId)
@@ -226,11 +234,11 @@ const AddressChangeForm: FC<Props> = ({
           )}
 
           {notice && (
-            <div className="form-alert" role="status">
+            <output className="form-alert">
               <AlertBanner onClose={() => setNotice(null)} variant="success">
                 {notice}
               </AlertBanner>
-            </div>
+            </output>
           )}
         </div>
 
@@ -252,7 +260,11 @@ const AddressChangeForm: FC<Props> = ({
           {step < LAST_STEP ? (
             <>
               {step > 1 && (
-                <Button isDisabled={isSaving} onPress={() => void saveDraft()} variant="secondary">
+                <Button
+                  isDisabled={isSaving || JSON.stringify(currentValues) === savedSnapshot}
+                  onPress={() => void saveDraft()}
+                  variant="secondary"
+                >
                   Save draft
                 </Button>
               )}
