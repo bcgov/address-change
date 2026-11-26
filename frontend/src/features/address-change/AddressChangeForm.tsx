@@ -16,6 +16,7 @@ import {
   withValidFieldsOnly,
   type AddressChangeFormValues,
 } from './schema'
+import LastSaved from './LastSaved'
 import StepIndicator from './StepIndicator'
 import {
   CollectionNoticeStep,
@@ -65,9 +66,9 @@ const AddressChangeForm: FC<Props> = ({
   const [phase, setPhase] = useState<'editing' | 'submitting' | 'done'>('editing')
   const [requestId, setRequestId] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const { control, handleSubmit, watch, setValue, getValues, trigger, formState } =
     useForm<AddressChangeFormValues>({
@@ -110,12 +111,12 @@ const AddressChangeForm: FC<Props> = ({
 
   const goTo = async (target: number, { blockOnFailure }: { blockOnFailure: boolean }) => {
     setError(null)
-    setNotice(null)
     setIsSaving(true)
     const snapshot = JSON.stringify(getValues())
     try {
       const savedId = await draft.save(target, getValues())
       setSavedSnapshot(snapshot)
+      setLastSavedAt(new Date())
       if (!draftAnnouncedRef.current) {
         draftAnnouncedRef.current = true
         onDraftCreated?.(savedId)
@@ -139,18 +140,17 @@ const AddressChangeForm: FC<Props> = ({
 
   const saveDraft = async () => {
     setError(null)
-    setNotice(null)
     setIsSaving(true)
     const values = getValues()
     const snapshot = JSON.stringify(values)
     try {
       const savedId = await draft.save(step, withValidFieldsOnly(values, fields[step]))
       setSavedSnapshot(snapshot)
+      setLastSavedAt(new Date())
       if (!draftAnnouncedRef.current) {
         draftAnnouncedRef.current = true
         onDraftCreated?.(savedId)
       }
-      setNotice('Draft saved.')
     } catch {
       setError('We could not save your draft. Please try again.')
     } finally {
@@ -235,25 +235,20 @@ const AddressChangeForm: FC<Props> = ({
               </AlertBanner>
             </div>
           )}
-
-          {notice && (
-            <output className="form-alert">
-              <AlertBanner onClose={() => setNotice(null)} variant="success">
-                {notice}
-              </AlertBanner>
-            </output>
-          )}
         </div>
 
         <div className="form-actions">
           {step > 0 && (
-            <Button
-              isDisabled={isSaving}
-              onPress={() => void goTo(step - 1, { blockOnFailure: false })}
-              variant="tertiary"
-            >
-              Back
-            </Button>
+            <div className="form-actions-start">
+              <Button
+                isDisabled={isSaving}
+                onPress={() => void goTo(step - 1, { blockOnFailure: false })}
+                variant="tertiary"
+              >
+                Back
+              </Button>
+              {step > 1 && <LastSaved savedAt={lastSavedAt} />}
+            </div>
           )}
           {onCancel && step === 0 && (
             <Button onPress={onCancel} variant="tertiary">
