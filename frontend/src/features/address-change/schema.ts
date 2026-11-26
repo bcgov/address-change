@@ -26,12 +26,7 @@ const conditionalIssues = (values: {
   mailingSameAsResidential: boolean
   mailingAddress: unknown
   notifyIcbc: boolean
-  icbc: {
-    driversLicenseNumber: string
-    heightCm: string
-    weightKg: string
-    securityKeyword: string
-  }
+  icbc: unknown
 }): z.IssueData[] => {
   const issues: z.IssueData[] = []
   if (!values.mailingSameAsResidential) {
@@ -43,7 +38,12 @@ const conditionalIssues = (values: {
     }
   }
   if (!values.notifyIcbc) return issues
-  const { driversLicenseNumber, heightCm, weightKg, securityKeyword } = values.icbc
+  const text = (value: unknown) => (typeof value === 'string' ? value : '')
+  const icbc = (values.icbc ?? {}) as Record<string, unknown>
+  const driversLicenseNumber = text(icbc.driversLicenseNumber)
+  const heightCm = text(icbc.heightCm)
+  const weightKg = text(icbc.weightKg)
+  const securityKeyword = text(icbc.securityKeyword)
   const fail = (field: string, message: string) =>
     issues.push({ code: 'custom', message, path: ['icbc', field] })
   if (!/^\d{7,8}$/.test(driversLicenseNumber.trim())) {

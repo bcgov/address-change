@@ -112,9 +112,10 @@ const AddressChangeForm: FC<Props> = ({
     setError(null)
     setNotice(null)
     setIsSaving(true)
+    const snapshot = JSON.stringify(getValues())
     try {
       const savedId = await draft.save(target, getValues())
-      setSavedSnapshot(JSON.stringify(getValues()))
+      setSavedSnapshot(snapshot)
       if (!draftAnnouncedRef.current) {
         draftAnnouncedRef.current = true
         onDraftCreated?.(savedId)
@@ -140,9 +141,11 @@ const AddressChangeForm: FC<Props> = ({
     setError(null)
     setNotice(null)
     setIsSaving(true)
+    const values = getValues()
+    const snapshot = JSON.stringify(values)
     try {
-      const savedId = await draft.save(step, withValidFieldsOnly(getValues(), fields[step]))
-      setSavedSnapshot(JSON.stringify(getValues()))
+      const savedId = await draft.save(step, withValidFieldsOnly(values, fields[step]))
+      setSavedSnapshot(snapshot)
       if (!draftAnnouncedRef.current) {
         draftAnnouncedRef.current = true
         onDraftCreated?.(savedId)

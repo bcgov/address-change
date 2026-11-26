@@ -114,6 +114,21 @@ describe('withValidFieldsOnly', () => {
     expect(saved.collectionNoticeAcknowledged).toBe(false)
   })
 
+  test('does not throw when a restored draft has non-string ICBC fields', () => {
+    const values = {
+      ...filled(),
+      icbc: {
+        driversLicenseNumber: 12345678,
+        heightCm: null,
+        weightKg: '70',
+        securityKeyword: 'k',
+      },
+    } as unknown as ReturnType<typeof filled>
+    const saved = withValidFieldsOnly(values, stepFields(true)[3])
+    expect(saved.icbc.weightKg).toBe('70')
+    expect(saved.icbc.driversLicenseNumber).toBe('')
+  })
+
   test('still drops an invalid licence number when an unrelated base field is invalid', () => {
     const base = filled()
     const values = {
