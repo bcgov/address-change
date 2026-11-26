@@ -190,7 +190,7 @@ describe('AddressChangeForm step flow', () => {
     expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument()
   })
 
-  test('Save draft saves only valid fields on the current step, stays put and the notice closes', async () => {
+  test('Save draft saves only valid fields on the current step, stays put and shows the last saved time', async () => {
     const onDraftCreated = vi.fn()
     renderForm({
       onDraftCreated,
@@ -213,7 +213,7 @@ describe('AddressChangeForm step flow', () => {
     await waitFor(() => expect(saveButton).toBeEnabled())
     await userEvent.click(saveButton)
 
-    expect(await screen.findByText('Draft saved.')).toBeInTheDocument()
+    expect(await screen.findByText(/Last saved at/)).toBeInTheDocument()
     expect(saveButton).toBeDisabled()
     expect(screen.getByText('New residential address')).toBeInTheDocument()
     expect(onDraftCreated).not.toHaveBeenCalled()
@@ -224,9 +224,6 @@ describe('AddressChangeForm step flow', () => {
       locality: 'Victoria',
       postalCode: '',
     })
-
-    await userEvent.click(screen.getByRole('button', { name: /close/i }))
-    await waitFor(() => expect(screen.queryByText('Draft saved.')).not.toBeInTheDocument())
   })
 
   test('Save draft on a new request reports the created draft once', async () => {
@@ -245,7 +242,7 @@ describe('AddressChangeForm step flow', () => {
     await userEvent.type(screen.getByLabelText(/Address line 1/), '1 Main St')
     await click('Save draft')
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument()
-    expect(screen.queryByText('Draft saved.')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Last saved/)).not.toBeInTheDocument()
   })
 
   test('shows an error and stays on the step if saving progress fails', async () => {
