@@ -1,0 +1,98 @@
+{{- $vault := dict "secrets" (list) -}}
+{{- if .Values.vault.enabled -}}
+{{- $vault = include "ac-db.recovery.vault" . | fromJson -}}
+{{- end -}}
+{{- if .Values.recovery.enabled }}
+{{- $storage := index .Values "backup-storage" }}
+{{- if $storage.enabled }}
+{{- fail "recovery requires S3 mode" }}
+{{- end }}
+{{- $target := required "recovery.database is required" .Values.recovery.database }}
+{{- if or (not (regexMatch "^[a-z][a-z0-9_]{0,62}$" $target)) (has $target (list .Values.database.name "postgres" "template0" "template1")) }}
+{{- fail "recovery.database must be a distinct application database identifier" }}
+{{- end }}
+{{- if and .Values.recovery.object (not (regexMatch "^[A-Za-z0-9][A-Za-z0-9_.-]*[.]sql[.]gz$" .Values.recovery.object)) }}
+{{- fail "recovery.object must be the exact .sql.gz object filename in the configured prefix" }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-recover-{{ $target | sha256sum | trunc 10 }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.recovery.activeDeadlineSeconds }}
+  template:
+    metadata:
+      {{- if .Values.vault.enabled }}
+      annotations:
+        {{- include "ac-db.vault.annotations" (merge (dict "root" .) $vault) | nindent 8 }}
+        {{- include "ac-db.vault.tokenAnnotation" . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "ac-backup.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.vault.enabled }}
+      serviceAccountName: {{ .Values.vault.serviceAccountName }}
+      {{- end }}
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml $storage.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- include "ac-backup.s3ClientInit" . | nindent 8 }}
+      containers:
+        - name: restore
+          image: "{{ $storage.image.repository }}:{{ $storage.image.tag }}"
+          imagePullPolicy: {{ $storage.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $storage.securityContext | nindent 12 }}
+          {{- if .Values.vault.enabled }}
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              {{- include "ac-db.vault.load" $vault | nindent 14 }}
+              exec /bin/bash /ac-backup/s3-operations.sh restore
+          {{- else }}
+          command: [/bin/bash, /ac-backup/s3-operations.sh, restore]
+          {{- end }}
+          env:
+            {{- include "ac-backup.s3Env" . | nindent 12 }}
+            {{- if not .Values.vault.enabled }}
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.adminCredentials.secretName | quote }}, key: {{ .Values.adminCredentials.usernameKey | quote }}}
+            {{- end }}
+            {{- if not .Values.vault.enabled }}
+            - name: RECOVERY_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.adminCredentials.secretName | quote }}, key: {{ .Values.adminCredentials.passwordKey | quote }}}
+            {{- end }}
+            - name: RECOVERY_DATABASE
+              value: {{ $target | quote }}
+            - name: RECOVERY_OBJECT
+              value: {{ .Values.recovery.object | quote }}
+            {{- if not .Values.vault.enabled }}
+            - name: MIGRATION_ROLE
+              value: {{ .Values.recovery.migrationRole | quote }}
+            {{- end }}
+            {{- if not .Values.vault.enabled }}
+            - name: RUNTIME_ROLE
+              value: {{ .Values.recovery.runtimeRole | quote }}
+            {{- end }}
+          volumeMounts:
+            - {name: s3-client, mountPath: /s3-client, readOnly: true}
+            - {name: scripts, mountPath: /ac-backup, readOnly: true}
+            - {name: staging, mountPath: /backups}
+          resources:
+            {{- toYaml $storage.resources | nindent 12 }}
+      volumes:
+        {{- if .Values.vault.enabled }}
+        {{- include "ac-db.vault.tokenVolume" . | nindent 8 }}
+        {{- end }}
+        - name: s3-client
+          emptyDir: {}
+        - name: scripts
+          configMap: {name: {{ .Release.Name }}-s3-operations}
+        - name: staging
+          emptyDir: {sizeLimit: {{ .Values.s3.stagingSize }}}
+{{- end }}

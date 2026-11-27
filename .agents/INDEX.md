@@ -14,5 +14,6 @@ Entry points that help agents find what to read or edit. List only important fil
 | `docs/ADR/` | Architecture decision records, starting with ADR-101 for OpenShift hosting and Patroni-managed PostgreSQL. |
 | `common/` | OpenShift templates and integration/load tests; see `common/AGENTS.md`. |
 | `.github/workflows/` | CI/CD workflows; see `.github/AGENTS.md`. |
+| `helm/OPERATIONS.md` | Database workflow, repository handover, and chart validation; charts live under `helm/charts/`. |
 | `docker-compose.yml` | Local database, migrations, backend, frontend, and optional profiles. |
 | `.vscode/launch.json` | "Debug full stack" configuration and local env values. |

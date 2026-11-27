@@ -1,0 +1,117 @@
+{{- if and .Values.vault.enabled (index .Values "backup-storage").enabled }}
+{{- fail "Vault mode requires backup-storage.enabled=false (S3 mode)" }}
+{{- end }}
+{{- $vault := dict "secrets" (list) -}}
+{{- if .Values.vault.enabled -}}
+{{- $vault = include "ac-db.backup.vault" . | fromJson -}}
+{{- end -}}
+{{- if not (index .Values "backup-storage").enabled }}
+{{- $storage := index .Values "backup-storage" }}
+{{- if not (hasPrefix "https://" .Values.s3.endpoint) }}
+{{- fail "s3.endpoint must be an HTTPS URL" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-s3-operations
+data:
+  s3-operations.sh: |
+    {{- .Files.Get "files/s3-operations.sh" | nindent 4 }}
+  recovery-grants.sql: |
+    {{- .Files.Get "files/recovery-grants.sql" | trimSuffix "\n" | nindent 4 }}
+    {{- include "address-change-db-permissions.grants" . | nindent 4 }}
+  backup.postgres.plugin: |
+    {{- (first $storage.config).contents | nindent 4 }}
+  backup.conf: |
+    postgres={{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}?verifySchema=address_change
+
+    0 3 * * * default flock -n /backups/.operation.lock /bin/bash /ac-backup/s3-operations.sh backup
+    0 6 * * * default flock -n /backups/.operation.lock /bin/bash /ac-backup/s3-operations.sh verify
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-s3
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: address-change-db-backup-s3
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: address-change-db-backup-s3
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        {{- if .Values.vault.enabled }}
+        {{- include "ac-db.vault.annotations" (merge (dict "root" .) $vault) | nindent 8 }}
+        {{- include "ac-db.vault.tokenAnnotation" . | nindent 8 }}
+        {{- end }}
+        checksum/config: {{ printf "%s%s%s%s%s" (.Files.Get "files/s3-operations.sh") (.Files.Get "files/recovery-grants.sql") (include "address-change-db-permissions.grants" .) (toJson $storage.config) (toJson .Values.database) | sha256sum }}
+    spec:
+      {{- if .Values.vault.enabled }}
+      serviceAccountName: {{ .Values.vault.serviceAccountName }}
+      {{- end }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml $storage.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- include "ac-backup.s3ClientInit" . | nindent 8 }}
+      containers:
+        - name: backup-storage
+          image: "{{ $storage.image.repository }}:{{ $storage.image.tag }}"
+          imagePullPolicy: {{ $storage.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $storage.securityContext | nindent 12 }}
+          {{- if .Values.vault.enabled }}
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              {{- include "ac-db.vault.load" $vault | nindent 14 }}
+              exec /bin/bash /backup.sh
+          {{- else }}
+          command: [/bin/bash, /backup.sh]
+          {{- end }}
+          env:
+            {{- include "ac-backup.s3Env" . | nindent 12 }}
+            - name: TZ
+              value: {{ $storage.env.TZ.value | quote }}
+            - name: BACKUP_CONF
+              value: /ac-backup-cron.conf
+            - name: PGDATABASE
+              value: {{ .Values.database.name | quote }}
+            {{- if not .Values.vault.enabled }}
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.backupRole.secretName | quote }}, key: username}
+            {{- end }}
+            {{- if not .Values.vault.enabled }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.backupRole.secretName | quote }}, key: password}
+            {{- end }}
+          volumeMounts:
+            - {name: s3-client, mountPath: /s3-client, readOnly: true}
+            - {name: scripts, mountPath: /ac-backup, readOnly: true}
+            # go-crond checks with lstat and ignores symlinks in ConfigMap directories.
+            - {name: scripts, mountPath: /ac-backup-cron.conf, subPath: backup.conf, readOnly: true}
+            - {name: scripts, mountPath: /backup.postgres.plugin, subPath: backup.postgres.plugin, readOnly: true}
+            - {name: staging, mountPath: /backups}
+            - {name: verification, mountPath: /var/lib/pgsql/data}
+          resources:
+            {{- toYaml $storage.resources | nindent 12 }}
+      volumes:
+        {{- if .Values.vault.enabled }}
+        {{- include "ac-db.vault.tokenVolume" . | nindent 8 }}
+        {{- end }}
+        - name: s3-client
+          emptyDir: {}
+        - name: scripts
+          configMap: {name: {{ .Release.Name }}-s3-operations}
+        - name: staging
+          emptyDir: {sizeLimit: {{ .Values.s3.stagingSize }}}
+        - name: verification
+          emptyDir: {sizeLimit: {{ .Values.s3.verificationSize }}}
+{{- end }}

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: address-change-db-backup
+description: Nightly Address Change PostgreSQL backups and isolated restore verification.
+type: application
+version: 0.3.0
+appVersion: "2.13.1"
+dependencies:
+  - name: backup-storage
+    condition: backup-storage.enabled
+    version: "0.1.18"
+    repository: https://bcgov.github.io/helm-charts
+  - name: address-change-db-permissions
+    version: "0.2.0"
+    repository: file://../address-change-db-permissions

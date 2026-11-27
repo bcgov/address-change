@@ -396,6 +396,8 @@ pyrightconfig.json
 **/secrets.json
 **/secrets.yml
 **/secrets.yaml
+# Helm template source, not a file containing credentials.
+!helm/charts/address-change-db-bootstrap/templates/secrets.yaml
 **/config.local.*
 **/config.prod.*
 **/*.p12

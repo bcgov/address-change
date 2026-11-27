@@ -1,0 +1,25 @@
+---
+title: Database operations
+description: Provisioning, bootstrap, S3 backup, and recovery for TEST and PROD.
+---
+
+The Address Change repository owns its database Helm charts and the manual
+**Address Change database operations** GitHub workflow. These previously lived
+in `loc-tools`. Moving the source does not require reinstalling existing Helm
+releases or deleting database storage.
+
+TEST and PROD use Patroni-managed PostgreSQL. DEV and PR previews retain their
+disposable databases and do not use this workflow.
+
+See the [database operations guide](https://github.com/bcgov/address-change/blob/main/helm/OPERATIONS.md)
+for chart locations, GitHub settings, repository handover, and local checks.
+The [recovery runbook](https://github.com/bcgov/address-change/blob/main/helm/charts/address-change-db-backup/RECOVERY.md)
+describes recovery into a separate database.
+
+For a new environment, prepare Vault credentials, provision Patroni, bootstrap
+the database, redeploy the application to run Flyway, then deploy backups.
+Create a new backup after migrations and verify the uploaded archive.
+
+Database runtime credentials are read from Vault. GitHub retains only deployment
+authentication; S3 endpoint and bucket settings remain workflow variables.
+See [runtime secrets](./runtime-secrets) for the application credential paths.

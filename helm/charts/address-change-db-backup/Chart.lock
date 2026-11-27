@@ -1,0 +1,9 @@
+dependencies:
+- name: backup-storage
+  repository: https://bcgov.github.io/helm-charts
+  version: 0.1.18
+- name: address-change-db-permissions
+  repository: file://../address-change-db-permissions
+  version: 0.2.0
+digest: sha256:627621e5072c4c285ea6a12d5767bb6f316b3832ab8afbe654ddb022f759436d
+generated: "2026-11-25T13:24:24.118572-07:00"

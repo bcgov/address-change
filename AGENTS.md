@@ -11,7 +11,7 @@ Repository facts for automated coding assistants. Keep every `AGENTS.md` at or u
 ## Stack
 - `backend/` (NestJS, Prisma), `frontend/` (Vite, React, Caddy), `migrations/` (Flyway SQL), `common/` (OpenShift templates, tests), `scripts/` (setup)
 - PostgreSQL major version is 18 across local development, PR previews, CI, and Patroni TEST/PROD. Official PostgreSQL clients/images are pinned to 18.6; Spilo/backup patch levels must be verified independently.
-- TEST/PROD consume Patroni provisioned in the same namespace by `loc-tools`; PRs retain disposable databases.
+- TEST/PROD consume Patroni provisioned by this repository's `helm/charts/` and database operations workflow; PRs retain disposable databases.
 - Deploys to OpenShift run from GitHub Actions (PR open, merge), not from a workstation.
 - Full stack locally: `docker compose up` (optional profiles: `schemaspy`, `caddy`)
 

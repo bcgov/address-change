@@ -1,6 +1,7 @@
 # GitHub workflows
 
 - PR deploys run through `workflows/reusable-deploy.yml`; tests through `workflows/reusable-tests.yml`.
+- Manual TEST/PROD database operations use `workflows/address-change-database.yml` and `scripts/address-change-database.sh`; see `../helm/OPERATIONS.md`.
 - Use the `github-actions` skill when authoring or reviewing workflows.
 - Use bcgov shared actions and workflows (`bcgov/action-*`, `bcgov/actions/*`, `bcgov/actions-openshift/*`, `bcgov/quickstart-openshift-helpers`) as provided; don't copy or fork them.
 - Never pin `@main`. Pin bcgov shared actions to a published release SHA with a `# vX.Y.Z` comment.

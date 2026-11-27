@@ -1,0 +1,69 @@
+name: Address Change database operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Database operation
+        type: choice
+        options: [provision-patroni, configure-patroni, bootstrap, deploy-backup, recover]
+        default: bootstrap
+        required: true
+      environment:
+        description: Target OpenShift environment
+        type: choice
+        options: [test, prod]
+        required: true
+      recovery_database:
+        description: Unused database name for recovery
+        type: string
+      recovery_archive:
+        description: Exact S3 archive filename (blank selects latest)
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: address-change-database-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  database:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    timeout-minutes: 80
+    environment: ${{ inputs.environment }}
+    env:
+      OPERATION: ${{ inputs.operation }}
+      TARGET_ENV: ${{ inputs.environment }}
+      RECOVERY_DATABASE: ${{ inputs.recovery_database }}
+      RECOVERY_ARCHIVE: ${{ inputs.recovery_archive }}
+      OC_NAMESPACE: ${{ vars.OC_NAMESPACE }}
+      OC_SERVER: ${{ vars.OC_SERVER }}
+      S3_ENDPOINT: ${{ vars.S3_ENDPOINT }}
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      S3_PREFIX: ${{ vars.S3_PREFIX }}
+      S3_REGION: ${{ vars.S3_REGION }}
+      VAULT_S3_PATH: ${{ vars.VAULT_S3_PATH }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Helm and OpenShift clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          helm_archive=helm-v4.3.1-linux-amd64.tar.gz
+          curl -fsSLO "https://get.helm.sh/$helm_archive"
+          curl -fsSLO "https://get.helm.sh/$helm_archive.sha256sum"
+          sha256sum --check "$helm_archive.sha256sum"
+          tar -xzf "$helm_archive" linux-amd64/helm
+          install -m 755 linux-amd64/helm "$RUNNER_TEMP/helm"
+          curl -fsSL https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz |
+            tar -xz -C "$RUNNER_TEMP" oc
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Run database operation
+        env:
+          OC_TOKEN: ${{ secrets.OC_TOKEN }}
+          KUBECONFIG: ${{ runner.temp }}/address-change-kubeconfig
+        run: bash .github/scripts/address-change-database.sh

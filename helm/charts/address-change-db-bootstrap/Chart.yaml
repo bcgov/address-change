@@ -1,0 +1,10 @@
+apiVersion: v2
+name: address-change-db-bootstrap
+description: Provisions the address-change PostgreSQL database, schema, roles, and credentials.
+type: application
+version: 0.2.0
+appVersion: "1.0.0"
+dependencies:
+  - name: address-change-db-permissions
+    version: "0.2.0"
+    repository: file://../address-change-db-permissions

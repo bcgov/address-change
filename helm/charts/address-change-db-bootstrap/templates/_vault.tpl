@@ -1,0 +1,3 @@
+{{- define "ac-db.bootstrap.vault" -}}
+{{- toJson (dict "secrets" (list (dict "path" (printf "%s/patroni-superuser" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "PGUSER" "key" "username") (dict "env" "PGPASSWORD" "key" "password"))) (dict "path" (printf "%s/migration" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "MIGRATION_USERNAME" "key" "username") (dict "env" "MIGRATION_PASSWORD" "key" "password"))) (dict "path" (printf "%s/runtime" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "RUNTIME_USERNAME" "key" "username") (dict "env" "RUNTIME_PASSWORD" "key" "password"))))) -}}
+{{- end -}}

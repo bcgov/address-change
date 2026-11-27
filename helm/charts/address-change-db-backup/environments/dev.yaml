@@ -1,0 +1,10 @@
+backup-storage:
+  persistence:
+    backup:
+      size: 2Gi
+  env:
+    ENVIRONMENT_NAME: {value: DEV}
+    ENVIRONMENT_FRIENDLY_NAME: {value: Address Change DEV database backups}
+    DAILY_BACKUPS: {value: "6"}
+    WEEKLY_BACKUPS: {value: "1"}
+    MONTHLY_BACKUPS: {value: "0"}
