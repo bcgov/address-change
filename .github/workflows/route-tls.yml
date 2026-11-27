@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
-      - uses: bcgov/actions-openshift/route-tls@510a8105fdffbb718094e8a093e638132e300975 # v0.10.0
+      - uses: bcgov/actions-openshift/route-tls@47805d2fc4e919382757c1fbeb68d39313abe64f # v0.11.0
         with:
           hostname: ${{ vars.ROUTE_HOST }}
           target_service: ${{ github.event.repository.name }}-prod-frontend
