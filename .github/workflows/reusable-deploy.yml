@@ -68,16 +68,8 @@ jobs:
           commands: |
             set -euo pipefail
             oc get service address-change-db-patroni -o name
-            for secret in address-change-db-runtime address-change-db-migration; do
-              for key in username password; do
-                value=$(oc get secret "$secret" -o "jsonpath={.data.$key}")
-                if [ -z "$value" ]; then
-                  echo "::error::$secret is missing $key; deploy loc-tools bootstrap first."
-                  exit 1
-                fi
-                unset value
-              done
-            done
+            # TEST/PROD credentials come from Vault. The injected Agent and
+            # startup loaders validate them; legacy Kubernetes Secrets may be absent.
 
   database:
     name: Deploy disposable PR database

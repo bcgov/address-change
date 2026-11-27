@@ -1,0 +1,56 @@
+vault:
+  enabled: false
+  namespace: platform-services
+  authPath: auth/k8s-gold
+  role: ""
+  serviceAccountName: b5cfc6-vault
+  databasePath: ""
+  s3Path: ""
+
+database:
+  host: address-change-db-patroni
+  port: 5432
+  name: address_change
+  schema: address_change
+  sslMode: require
+
+# Administrative credentials created and owned by the Patroni release.
+adminCredentials:
+  secretName: address-change-db-patroni
+  usernameKey: username-superuser
+  passwordKey: password-superuser
+
+# These Secrets are created by this chart. Passwords are generated on first
+# install and retained on upgrades. Do not put plaintext passwords in values.
+roles:
+  migration:
+    username: address_change_migration
+    secretName: address-change-db-migration
+  runtime:
+    username: address_change_runtime
+    secretName: address-change-db-runtime
+
+image:
+  repository: postgres
+  tag: 18.6-alpine
+  pullPolicy: IfNotPresent
+
+job:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+networkPolicy:
+  enabled: true
+  patroniPodSelector:
+    app.kubernetes.io/name: patroni
+    app.kubernetes.io/instance: address-change-db
+  applicationPodSelector:
+    database-client: address-change

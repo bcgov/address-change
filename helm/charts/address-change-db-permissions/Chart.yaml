@@ -1,0 +1,5 @@
+apiVersion: v2
+name: address-change-db-permissions
+description: Shared Address Change database grants and search paths.
+type: library
+version: 0.2.0

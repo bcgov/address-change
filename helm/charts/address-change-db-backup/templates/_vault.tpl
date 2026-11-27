@@ -1,0 +1,9 @@
+{{- define "ac-db.provision.vault" -}}
+{{- toJson (dict "secrets" (list (dict "path" (printf "%s/patroni-superuser" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "PGUSER" "key" "username") (dict "env" "PGPASSWORD" "key" "password"))) (dict "path" (printf "%s/backup" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "BACKUP_USER" "key" "username") (dict "env" "BACKUP_PASSWORD" "key" "password"))))) -}}
+{{- end -}}
+{{- define "ac-db.backup.vault" -}}
+{{- toJson (dict "secrets" (list (dict "path" (required "vault.s3Path is required" .Values.vault.s3Path) "fields" (list (dict "env" "AWS_ACCESS_KEY_ID" "key" "AWS_ACCESS_KEY_ID") (dict "env" "AWS_SECRET_ACCESS_KEY" "key" "AWS_SECRET_ACCESS_KEY"))) (dict "path" (printf "%s/backup" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "DATABASE_USER" "key" "username") (dict "env" "DATABASE_PASSWORD" "key" "password"))))) -}}
+{{- end -}}
+{{- define "ac-db.recovery.vault" -}}
+{{- toJson (dict "secrets" (list (dict "path" (required "vault.s3Path is required" .Values.vault.s3Path) "fields" (list (dict "env" "AWS_ACCESS_KEY_ID" "key" "AWS_ACCESS_KEY_ID") (dict "env" "AWS_SECRET_ACCESS_KEY" "key" "AWS_SECRET_ACCESS_KEY"))) (dict "path" (printf "%s/patroni-superuser" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "PGUSER" "key" "username") (dict "env" "RECOVERY_PASSWORD" "key" "password"))) (dict "path" (printf "%s/migration" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "MIGRATION_ROLE" "key" "username"))) (dict "path" (printf "%s/runtime" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "RUNTIME_ROLE" "key" "username"))))) -}}
+{{- end -}}

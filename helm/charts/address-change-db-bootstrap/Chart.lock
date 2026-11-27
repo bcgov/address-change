@@ -1,0 +1,6 @@
+dependencies:
+- name: address-change-db-permissions
+  repository: file://../address-change-db-permissions
+  version: 0.2.0
+digest: sha256:27b7cc72729acf591f681146a3e5964d7a14db11bea22d0bda478c62287d17e5
+generated: "2026-11-25T13:24:16.643673-07:00"

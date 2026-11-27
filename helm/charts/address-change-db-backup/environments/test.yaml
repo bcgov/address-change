@@ -1,0 +1,7 @@
+backup-storage:
+  env:
+    ENVIRONMENT_NAME: {value: TEST}
+    ENVIRONMENT_FRIENDLY_NAME: {value: Address Change TEST database backups}
+    DAILY_BACKUPS: {value: "6"}
+    WEEKLY_BACKUPS: {value: "1"}
+    MONTHLY_BACKUPS: {value: "0"}

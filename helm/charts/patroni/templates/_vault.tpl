@@ -1,0 +1,3 @@
+{{- define "ac-db.patroni.vault" -}}
+{{- toJson (dict "secrets" (list (dict "path" (printf "%s/patroni-superuser" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "PGUSER_SUPERUSER" "key" "username") (dict "env" "PGPASSWORD_SUPERUSER" "key" "password"))) (dict "path" (printf "%s/patroni-admin" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "PGUSER_ADMIN" "key" "username") (dict "env" "PGPASSWORD_ADMIN" "key" "password"))) (dict "path" (printf "%s/patroni-replication" (required "vault.databasePath is required" .Values.vault.databasePath)) "fields" (list (dict "env" "PGUSER_STANDBY" "key" "username") (dict "env" "PGPASSWORD_STANDBY" "key" "password"))))) -}}
+{{- end -}}

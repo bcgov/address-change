@@ -1,0 +1,170 @@
+{{- $vault := dict "secrets" (list) -}}
+{{- if .Values.vault.enabled -}}
+{{- $vault = include "ac-db.bootstrap.vault" . | fromJson -}}
+{{- end -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "address-change-db-bootstrap.fullname" . }}
+  labels:
+    {{- include "address-change-db-bootstrap.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      {{- if .Values.vault.enabled }}
+      annotations:
+        {{- include "ac-db.vault.annotations" (merge (dict "root" .) $vault) | nindent 8 }}
+        {{- include "ac-db.vault.tokenAnnotation" . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "address-change-db-bootstrap.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- if .Values.vault.enabled }}
+      serviceAccountName: {{ .Values.vault.serviceAccountName }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: provision-database
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              {{- if .Values.vault.enabled }}
+              {{- include "ac-db.vault.load" $vault | nindent 14 }}
+              {{- end }}
+              psql --dbname=postgres \
+                --set=ON_ERROR_STOP=1 \
+                --set=database_name="$DATABASE_NAME" \
+                --set=schema_name="$SCHEMA_NAME" \
+                --set=migration_user="$MIGRATION_USERNAME" \
+                --set=migration_password="$MIGRATION_PASSWORD" \
+                --set=runtime_user="$RUNTIME_USERNAME" \
+                --set=runtime_password="$RUNTIME_PASSWORD" <<'SQL'
+              SELECT format(
+                'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+                :'migration_user', :'migration_password'
+              ) WHERE NOT EXISTS (
+                SELECT FROM pg_catalog.pg_roles WHERE rolname = :'migration_user'
+              ) \gexec
+
+              SELECT format(
+                'ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+                :'migration_user', :'migration_password'
+              ) \gexec
+
+              SELECT format(
+                'CREATE ROLE %I LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+                :'runtime_user', :'runtime_password'
+              ) WHERE NOT EXISTS (
+                SELECT FROM pg_catalog.pg_roles WHERE rolname = :'runtime_user'
+              ) \gexec
+
+              SELECT format(
+                'ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+                :'runtime_user', :'runtime_password'
+              ) \gexec
+
+              SELECT format(
+                'CREATE DATABASE %I OWNER %I', :'database_name', :'migration_user'
+              ) WHERE NOT EXISTS (
+                SELECT FROM pg_database WHERE datname = :'database_name'
+              ) \gexec
+
+              SELECT format(
+                'ALTER DATABASE %I OWNER TO %I', :'database_name', :'migration_user'
+              ) \gexec
+              SQL
+
+              psql --dbname="$DATABASE_NAME" \
+                --set=ON_ERROR_STOP=1 \
+                --set=database_name="$DATABASE_NAME" \
+                --set=schema_name="$SCHEMA_NAME" \
+                --set=migration_user="$MIGRATION_USERNAME" \
+                --set=runtime_user="$RUNTIME_USERNAME" <<'SQL'
+              SELECT format(
+                'CREATE SCHEMA IF NOT EXISTS %I AUTHORIZATION %I',
+                :'schema_name', :'migration_user'
+              ) \gexec
+              SELECT format(
+                'ALTER SCHEMA %I OWNER TO %I', :'schema_name', :'migration_user'
+              ) \gexec
+
+              {{- include "address-change-db-permissions.grants" . | nindent 14 }}
+              SQL
+          env:
+            - name: PGHOST
+              value: {{ required "database.host is required" .Values.database.host | quote }}
+            - name: PGPORT
+              value: {{ .Values.database.port | quote }}
+            - name: PGSSLMODE
+              value: {{ .Values.database.sslMode | quote }}
+            {{- if not .Values.vault.enabled }}
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "adminCredentials.secretName is required" .Values.adminCredentials.secretName }}
+                  key: {{ .Values.adminCredentials.usernameKey }}
+            {{- end }}
+            {{- if not .Values.vault.enabled }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "adminCredentials.secretName is required" .Values.adminCredentials.secretName }}
+                  key: {{ .Values.adminCredentials.passwordKey }}
+            {{- end }}
+            - name: DATABASE_NAME
+              value: {{ required "database.name is required" .Values.database.name | quote }}
+            - name: SCHEMA_NAME
+              value: {{ required "database.schema is required" .Values.database.schema | quote }}
+            {{- if not .Values.vault.enabled }}
+            - name: MIGRATION_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.roles.migration.secretName }}
+                  key: username
+            {{- end }}
+            {{- if not .Values.vault.enabled }}
+            - name: MIGRATION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.roles.migration.secretName }}
+                  key: password
+            {{- end }}
+            {{- if not .Values.vault.enabled }}
+            - name: RUNTIME_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.roles.runtime.secretName }}
+                  key: username
+            {{- end }}
+            {{- if not .Values.vault.enabled }}
+            - name: RUNTIME_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.roles.runtime.secretName }}
+                  key: password
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.vault.enabled }}
+      volumes:
+        {{- include "ac-db.vault.tokenVolume" . | nindent 8 }}
+      {{- end }}
